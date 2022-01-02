@@ -6,6 +6,8 @@
 
 namespace Term {
 
+extern bool debug;
+
 enum class style {
     reset = 0,
     bold = 1,

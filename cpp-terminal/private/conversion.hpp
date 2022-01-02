@@ -8,6 +8,8 @@
 #else
 #include <sys/ioctl.h>
 #endif
+#ifndef ConvHeaderGuard
+#define ConvHeaderGuard
 
 namespace Term::Private {
 static constexpr uint8_t UTF8_ACCEPT = 0;
@@ -94,17 +96,39 @@ inline std::string utf32_to_utf8(const std::u32string& s) {
     return r;
 }
 // coverts a string into an integer
-inline int convert_string_to_int(const char* string,
+inline int convert_string_to_int(const char* str,
                                  const char* format,
                                  int* rows,
                                  int* cols) {
 #ifdef _WIN32
     // windows provides it's own alternative to sscanf()
-    return sscanf_s(string, format, rows, cols);
+    return sscanf_s(str, format, rows, cols);
 #else
     // TODO move to a better way
-    return sscanf(string, format, rows, cols);
+    return sscanf(str, format, rows, cols);
 #endif
+
+}
+
+inline std::string to_hex(int i) {
+    const std::string hexdigit = "0123456789abcdef";
+    if (i == 0) return "0";
+    int r;
+    bool neg = false;
+    std::string h;
+    if (i < 0) {
+        neg = true;
+        i = -i;
+    }
+    while (i) {
+        r = i % 16;
+        i = i / 16;
+        h = hexdigit.substr(r, 1) + h;
+    }
+    return (neg ? "-" : "") + h;
 }
 
 }  // namespace Term::Private
+
+#endif // ConvHeaderGuard
+

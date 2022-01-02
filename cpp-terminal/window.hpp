@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cpp-terminal/base.hpp>
+#include "base.hpp"
 #include <vector>
 
 namespace Term {

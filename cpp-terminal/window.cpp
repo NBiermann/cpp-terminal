@@ -1,4 +1,4 @@
-#include <cpp-terminal/window.hpp>
+#include "window.hpp"
 #include <stdexcept>
 #include "private/conversion.hpp"
 

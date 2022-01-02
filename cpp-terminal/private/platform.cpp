@@ -1,4 +1,15 @@
 #include "platform.hpp"
+#include "../input.hpp"
+#include "conversion.hpp"
+#include "../base.hpp"
+#include <iostream>
+#include <ios>
+#include <istream>
+#include <iomanip>
+#include <string>
+#include <chrono>
+#include <thread>
+
 
 bool Term::Private::is_stdin_a_tty() {
 #ifdef _WIN32
@@ -44,50 +55,104 @@ bool Term::Private::get_term_size(int& rows, int& cols) {
 #endif
 }
 
-bool Term::Private::read_raw(char* s) {
-    // TODO: What if the keyboard is not initialzed?
-    if (false) {
-        int c = getchar();
-        if (c >= 0) {
-            *s = c;
-        } else if (c == EOF) {
-            // In non-raw (blocking) mode this happens when the input file
-            // ends. In such a case, return the End of Transmission (EOT)
-            // character (Ctrl-D)
-            *s = 0x04;
-        } else {
-            throw std::runtime_error("getchar() failed");
-        }
+
+bool Term::Private::read_raw(char32_t* s) {
+    const bool debug = true;
+
+#ifdef _WIN32
+    if (!_kbhit()) return false;
+    int i = _getwch();
+    if (i == EOF) throw std::runtime_error("_getch() failed");
+    if (debug)
+        std::cout << "(raw: " << Private::to_hex((int) i);
+
+    // A few special key combinations are rendered by Windows as 2
+    // numbers, requiring another _getwch() call. The first number is always null:
+    //    Ctrl - Num_Decimal_Point = 0 0x93
+    //    Ctrl - Num_0 = 0, 0x92
+    //    Ctrl - Num_1 = 0, 0x75
+    //    Ctrl - Num_2 = 0, 0x91
+    //    Ctrl - Num_3 = 0, 0x76
+    //    Ctrl - Num_4 = 0, 0x73
+    //    (Ctrl - Num_5 will not be recognized)
+    //    Ctrl - Num_6 = 0, 0x74
+    //    Ctrl - Num_7 = 0, 0x77
+    //    Ctrl - Num_8 = 0, 0x8d
+    //    Ctrl - Num_9 = 0, 0x84
+    //    Ctrl - Alt - Enter = 0, 0x1c
+    // On Linux, ctrl - Num_x is the same as Num_x
+    // I decided to ignore the above (and possibly more such) Windows combinations
+    // with the only exception of 0 1c (which will be rendered as Alt-Enter, because
+    // Ctrl-Alt-Enter is not defined (apparently, no unique ANSI sequence for this).
+    if (i == 0) {
+        int j = _getwch();
+        if (j == EOF) throw std::runtime_error("_getch() failed");
+        if (debug)
+            std::cout << " " << Private::to_hex((int) j) << ") ";
+        *s = (j == 0x1c ? (Key::ALT | Key::ENTER) : Key::UNKNOWN);
         return true;
     }
-#ifdef _WIN32
-    HANDLE hin = GetStdHandle(STD_INPUT_HANDLE);
-    if (hin == INVALID_HANDLE_VALUE) {
-        throw std::runtime_error("GetStdHandle(STD_INPUT_HANDLE) failed");
-    }
-    char buf[1];
-    DWORD nread;
-    if (_kbhit()) {
-        if (!ReadFile(hin, buf, 1, &nread, nullptr)) {
-            throw std::runtime_error("ReadFile() failed");
-        }
-        if (nread == 1) {
-            *s = buf[0];
-            return true;
-        } else {
-            throw std::runtime_error("kbhit() and ReadFile() inconsistent");
-        }
-    } else {
-        return false;
-    }
+    if (debug) std::cout << ") ";
+    *s = static_cast<char32_t>(i);
+    return true;
+
 #else
-    int nread = read(STDIN_FILENO, s, 1);
+    unsigned char c[3];
+    int nread = read(STDIN_FILENO, c, 1);
     if (nread == -1 && errno != EAGAIN) {
         throw std::runtime_error("read() failed");
     }
-    return (nread == 1);
+    if (nread == 0) return false;
+    //std::cout << "(raw: " << to_hex((int) c[0]) << ") ";
+    char32_t u = static_cast<char32_t>(c[0]);
+    if (debug)
+        std::cout << "(raw: " << Private::to_hex((int) u);
+    int bytes_to_follow;
+    if (u < 0x80) {
+        *s = u;
+        if (debug) std::cout << ") ";
+        return true;
+    }
+    else if (u >> 5 == 6) {
+            bytes_to_follow = 1;
+            u = u & 0x1f;
+    }
+    else if (u >> 4 == 0xe) {
+        bytes_to_follow = 2;
+        u = u & 0xf;
+    }
+    else if (u >> 3 == 0x1e) {
+        bytes_to_follow = 3;
+        u = u & 7;
+    }
+    else {
+        *s = Key::UNKNOWN;
+        return true;
+    }
+    nread = read(STDIN_FILENO, c, bytes_to_follow);
+    if (nread == -1 && errno != EAGAIN) {
+        throw std::runtime_error("read() failed");
+    }
+    if (nread != bytes_to_follow) {
+        *s = Key::UNKNOWN;
+        return true;
+    }
+    for (int i = 0; i != bytes_to_follow; ++i) {
+        if (debug)
+            std::cout << "," << Private::to_hex((int) c[i]);
+        if (c[i] >> 6 != 2) {
+            *s = Key::UNKNOWN;
+            return true;
+        }
+        u = (u << 6) | (c[i] & 0x3f);
+    }
+    *s = u;
+    if (debug) std::cout << " -> " << Private::to_hex(int(*s)) << ") ";
+    return true;
 #endif
 }
+
+
 
 Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
 #ifdef _WIN32
@@ -141,7 +206,7 @@ Term::Private::BaseTerminal::BaseTerminal(bool enable_keyboard,
     if (keyboard_enabled) {
         hin = GetStdHandle(STD_INPUT_HANDLE);
         in_code_page = GetConsoleCP();
-        SetConsoleCP(65001);
+//        SetConsoleCP(65001);
         if (hin == INVALID_HANDLE_VALUE) {
             throw std::runtime_error("GetStdHandle(STD_INPUT_HANDLE) failed");
         }

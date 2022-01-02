@@ -1,8 +1,10 @@
-#include <cpp-terminal/base.hpp>
+#include "base.hpp"
 #include <iostream>
 #include <string>
 #include "private/conversion.hpp"
 #include "private/platform.hpp"
+
+bool debug = false;
 
 std::string Term::color(style value) {
     return "\033[" + std::to_string(static_cast<unsigned int>(value)) + 'm';
@@ -93,33 +95,33 @@ void Term::save_screen() {
 }
 
 void Term::get_cursor_position(int& rows, int& cols) {
-    char buf[32];
+    std::string buf;
+    char32_t c;
     write(cursor_position_report());
-    for (unsigned int i = 0; i < sizeof(buf) - 1; i++) {
-        while (!Private::read_raw(&buf[i]))
+    for (unsigned int i = 0; i < 64; i++) {
+        while (!Private::read_raw(&c))
             ;
+        buf.push_back(char(c));
         if (buf[i] == 'R') {
             if (i < 5) {
                 throw std::runtime_error(
                     "get_cursor_position(): too short response");
             } else {
-                buf[i] = '\0';
+                buf.pop_back();
             }
             break;
         }
     }
     // Find the result in the response, drop the rest:
-    for (unsigned int i = 0; i < sizeof(buf) - 6; i++) {
-        if (buf[i] == '\x1b' && buf[i + 1] == '[') {
-            if (Private::convert_string_to_int(&buf[i + 2], "%d;%d", &rows,
+    for (unsigned int i = 0; i != buf.size(); i++) {
+        if (buf[i] == U'\x1b' && buf[i + 1] == U'[') {
+            if (Private::convert_string_to_int(buf.substr(i + 2).c_str(), "%d;%d", &rows,
                                                &cols) != 2) {
                 throw std::runtime_error(
                     "get_cursor_position(): result could not be parsed");
             }
             return;
         }
-        if (buf[i] == '\0')
-            break;
     }
     throw std::runtime_error(
         "get_cursor_position(): result not found in the response");

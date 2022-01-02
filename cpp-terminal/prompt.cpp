@@ -1,5 +1,5 @@
-#include <cpp-terminal/input.hpp>
-#include <cpp-terminal/prompt.hpp>
+#include "input.hpp"
+#include "prompt.hpp"
 #include <iostream>
 #include "private/conversion.hpp"
 #include "private/platform.hpp"
@@ -119,9 +119,9 @@ std::string Term::prompt(Terminal& term,
                 m.lines[m.cursor_row - 1].substr(m.cursor_col - 1);
             m.lines[m.cursor_row - 1] = before += newchar += after;
             m.cursor_col++;
-        } else if (key == Key::CTRL + 'd') {
+        } else if (key == (Key::CTRL | U'd')) {
             if (m.lines.size() == 1 && m.lines[m.cursor_row - 1].empty()) {
-                m.lines[m.cursor_row - 1].push_back(Key::CTRL + 'd');
+                m.lines[m.cursor_row - 1].push_back(U'\x4');
                 std::cout << "\n" << std::flush;
                 history.push_back(m.lines[0]);
                 return m.lines[0];
@@ -219,13 +219,13 @@ std::string Term::prompt(Terminal& term,
                 case Key::ENTER:
                     not_complete = !iscomplete(concat(m.lines));
                     if (not_complete) {
-                        key = Key::ALT_ENTER;
+                        key = Key::ALT | Key::ENTER;
                     } else {
                         break;
                     }
                     [[fallthrough]];
-                case Key::CTRL + 'n':
-                case Key::ALT_ENTER:
+                case Key::CTRL | U'n':
+                case Key::ALT | Key::ENTER:
                     std::string before =
                         m.lines[m.cursor_row - 1].substr(0, m.cursor_col - 1);
                     std::string after =

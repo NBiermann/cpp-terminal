@@ -22,12 +22,10 @@ bool is_stdout_a_tty();
 
 bool get_term_size(int& rows, int& cols);
 
-
-
 // Returns true if a character is read, otherwise immediately returns false
 // This can't be made inline
 bool read_raw(char32_t* s);
-
+//bool read_raw2(char &c1, &c2);
 
 /* Note: the code that uses Terminal must be inside try/catch block, otherwise
  * the destructors will not be called when an exception happens and the
