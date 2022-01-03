@@ -240,10 +240,11 @@ char32_t Term::read_key0() {
     if (!seq.size()) return 0;
     if (seq.size() == 1) {
         switch (seq[0]) {
-        // Ctrl-Enter is 0a on Windows, but on Linux 0d,
-        // just as Enter, so ...
+        // Ctrl-Enter yields 0a on Windows, but on Linux 0d which is no
+        // different from Enter, so we'll bring these two in line
         case U'\x0a' : return ENTER;
-        // Technically, it might make sense to define BACKSPACE as 7f.
+        // Technically, it could make sense to define BACKSPACE as 7f.
+		// Sticking with the cpp-terminal convention though:
         case U'\x7f' : return BACKSPACE;
         case U'\x08' : return CTRL | BACKSPACE;
         default : return seq[0];
@@ -282,7 +283,6 @@ u32string Term::read_sequence0() {
             if (!Private::read_raw(&c)) return seq;
             seq.push_back(c);
         } while (c < 0x40);
-        return seq;
     }
     return seq;
 }

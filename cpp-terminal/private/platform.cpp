@@ -57,7 +57,7 @@ bool Term::Private::get_term_size(int& rows, int& cols) {
 
 
 bool Term::Private::read_raw(char32_t* s) {
-    const bool debug = true;
+    const bool debug = false;
 
 #ifdef _WIN32
     if (!_kbhit()) return false;

@@ -75,13 +75,12 @@ enum Key {
 
 extern std::map<std::u32string, char32_t> sequences;
 
-// Waits for a key press, translates escape codes
+// Waits for a key press, translates escape codes, decodes utf8
 char32_t read_key();
 
-// If there was a key press, returns the translated key from escape codes,
-// otherwise returns 0. If the escape code is not supported, returns Key::UNKNWON_ESCAPE_CODE
-// If a
-//
+// If there was a key press, returns the translated key from escape codes
+// resp. the decoded key from utf8, otherwise returns 0. 
+// If the escape code is not supported, returns Key::UNKNWON
 char32_t read_key0();
 
 std::u32string read_sequence();

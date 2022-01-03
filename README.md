@@ -3,7 +3,7 @@ This is a fork of https://github.com/jupyter-xeus/cpp-terminal adjusted to my pe
 - UTF support for keyboard input (full UTF support on Linux, UCS-2 compliant on Windows)
 - Certain window features
 
-**Warning**: At the moment, cpp-terminal-utf is under heavy development and should not be cloned.
+**Warning**: At the moment, cpp-terminal-utf is under heavy development and should not be used. A first stable version will be announced here.
 
 
 
