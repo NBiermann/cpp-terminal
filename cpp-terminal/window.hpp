@@ -25,39 +25,36 @@ enum class border_type : uint8_t {
 };
 
 class Color {
-    friend Window;
-	bool rgb_mode;
+    friend class Window;
+protected :
+ 	bool rgb_mode;
 	uint8_t r, g;
 	union {
 		uint8_t b;
 		Term::fg fg_val;
 		Term::bg bg_val;
 	};
+	Color(const Term::fg val) : rgb_mode(false), fg_val(val) {}
+	Color(const Term::bg val) : rgb_mode(false), bg_val(val) {}
 public :
-    Color(const uint r_, const uint g_, const uint b_) : rgb_mode(true), r(r_), g(g_), b(b_)) {}c
-    void set(const uint r_, const uint g_, const uint b_) {
-        rgb_mode = true;
-        r = r_; g = g_; b = b_;
-    }
-    bool is_rgb() const {return rgb_mode}
-    virtual bool operator==(const Color&) = 0;
+    Color(const uint8_t r_, const uint8_t g_, const uint8_t b_) : rgb_mode(true), r(r_), g(g_), b(b_) {}
+    bool is_rgb() const {return rgb_mode;}
+    // TODO: protected the following gets from wrong access
+    uint8_t get_r() const {return r;}
+    uint8_t get_g() const {return g;}
+    uint8_t get_b() const {return b;}
+    virtual fg get_fg() const;
+    virtual bg get_bg() const;
     virtual std::string render() = 0;
     virtual bool is_reset() = 0;
 };
 
-class fgColor : Color {
-    friend Window;
+class fgColor : public Color  {
+    friend class Window;
 public :
-    fgColor(const Term::fg val) : rgb_mode(false), fg_val(val)) {}
-    bool operator==(const fgColor &fg2) {
-        if (rgb_mode != fg2.rgb_mode) return false;
-        if (rgb_mode) return (r == fg2.r && g == fg2.g && b == fg2.b);
-        return (fg_val == fg2.fg_val);
-    }
-    void set(const Term::fg val) {
-        rgb_mode = false;
-        fg_val = val;
-    }
+    fgColor(fg c) : Color(c) {}
+    fgColor(const uint8_t r_, const uint8_t g_, const uint8_t b_) : Color(r_, g_, b_) {}
+    fg get_fg() const {return fg_val;}
     std::string render() {
         if (rgb_mode) return Term::color24_fg(r, g, b);
         return Term::color(fg_val);
@@ -67,19 +64,18 @@ public :
     }
 };
 
-class bgColor : Color {
-    friend Window;
+bool operator==(const fgColor &c1, const fgColor &c2) {
+    if (c1.is_rgb() != c2.is_rgb()) return false;
+    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
+    return (c1.get_fg() == c2.get_fg());
+}
+
+class bgColor : public Color {
+    friend class Window;
 public :
-    bgColor(const Term::bg val) : rgb_mode(false), bg_val(val)) {}
-    bool operator==(const fgColor &bg2) {
-        if (rgb_mode != bg2.rgb_mode) return false;
-        if (rgb_mode) return (r == bg2.r && g == bg2.g && b == bg2.b);
-        return (bg_val == bg2.bg_val);
-    }
-    void set(const Term::bg val) {
-        rgb_mode = false;
-        bg_val = val;
-    }
+    bgColor(bg c) : Color(c) {}
+    bgColor(const uint8_t r_, const uint8_t g_, const uint8_t b_) : Color(r_, g_, b_) {}
+    bg get_bg() const {return bg_val;}
     std::string render() {
         if (rgb_mode) return Term::color24_bg(r, g, b);
         return Term::color(bg_val);
@@ -89,19 +85,27 @@ public :
     }
 };
 
+bool operator==(const bgColor &c1, const bgColor &c2) {
+    if (c1.is_rgb() != c2.is_rgb()) return false;
+    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
+    return (c1.get_bg() == c2.get_bg());
+}
+
 class Cell {
-    friend Window;
+    friend class Window;
 	char32_t ch;
 	fgColor cell_fg;
 	bgColor cell_bg;
 	style cell_style;
 public :
-    Cell() : ch(U' '), cell_fg(fg::reset), cell_bg(bg::reset), cell_style(style::reset);
-    Cell(char32_t c) : ch(c), cell_fg(fg::reset), cell_bg(bg::reset), cell_style(style::reset);
-}
+    Cell() : ch(U' '), cell_fg(fg::reset), cell_bg(bg::reset), cell_style(style::reset) {}
+    Cell(char32_t c) : ch(c), cell_fg(fg::reset), cell_bg(bg::reset), cell_style(style::reset) {}
+};
+
+class ChildWindow; // forward declaration
 
 class Window {
-   private:
+   protected :
     size_t w, h;                  // width and height of the window
     bool is_main_window;
     bool auto_growing;
@@ -115,18 +119,18 @@ class Window {
     std::vector<ChildWindow> children;
 
     void assure_pos(size_t x, size_t y);
-    Window merge_children();
+    Window merge_children() const;
 
-   public:
+   public :
     Window(size_t w_, size_t h_, bool grow = false)
         : w{w_},
           h{h_},
-          is_main_window(true);
+          is_main_window(true),
           auto_growing(grow),
           cursor_x{0},
           cursor_y{0},
-          indent(0);
-          auto_newline(true);
+          indent(0),
+          auto_newline(true),
           active_fg(fgColor(fg::reset)),
           active_bg(bgColor(bg::reset)),
           active_style(style::reset),
@@ -142,7 +146,7 @@ class Window {
 
     size_t get_cursor_x();
     size_t get_cursor_y();
-    void set_cursor(int, int);
+    void set_cursor(size_t, size_t);
 
     size_t get_indent();
     void set_indent(size_t);
@@ -155,8 +159,10 @@ class Window {
     Cell get_cell(size_t, size_t);
 
     void set_char(size_t, size_t, char32_t);
+    void set_fg(size_t, size_t, fgColor);
     void set_fg(size_t, size_t, fg);
     void set_fg(size_t, size_t, uint8_t, uint8_t, uint8_t);
+    void set_bg(size_t, size_t, bgColor);
     void set_bg(size_t, size_t, bg);
     void set_bg(size_t, size_t, uint8_t, uint8_t, uint8_t);
     void set_style(size_t, size_t, style);
@@ -164,12 +170,12 @@ class Window {
     void choose_fg(fg);
     void choose_fg(uint8_t, uint8_t, uint8_t);
     void choose_bg(bg);
-    void choose bg(uint8_t, uint8_t, uint8_t);
+    void choose_bg(uint8_t, uint8_t, uint8_t);
     void choose_style(style);
 
 
-    void print_str(const std::u32string&)
-    void print_str(const std::string);
+    void print_str(const std::u32string&);
+    void print_str(const std::string&);
 
     void fill_fg(int, int, int, int, fgColor);
     void fill_bg(int, int, int, int, bgColor);
@@ -183,33 +189,24 @@ class Window {
 
     std::string render();
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
-    size_t make_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = 1, bool grow = false);
+    size_t make_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1, bool grow = false);
 };
 
-class ChildWindow : Window {
+class ChildWindow : public Window {
     friend Window;
     size_t offset_x, offset_y;
-    enum {no_border, ascii_border, single_border, double_border} border;
+    border_type border;
     bool visible;
 
-    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = 1, bool grow = false)
-        : offset_x(o_x),
+    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1, bool grow = false)
+        : Window(w_, h_, grow),
+          offset_x(o_x),
           offset_y(o_y),
           border(b),
-          visible(false);
-          w{w_},
-          h{h_},
-          is_main_window(false);
-          auto_growing(grow),
-          cursor_x{0},
-          cursor_y{0},
-          indent(0);
-          auto_newline(true);
-          active_fg(fgColor(fg::reset)),
-          active_bg(bgColor(bg::reset)),
-          active_style(style::reset),
-          grid(h_)
-    {}
+          visible(false)
+{
+    is_main_window = false;
+}
 
 public :
     void show() {visible = true;}
