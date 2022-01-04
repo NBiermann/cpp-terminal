@@ -8,7 +8,7 @@ namespace Term {
 
 extern bool debug;
 
-enum class style {
+enum class style : uint8_t {
     reset = 0,
     bold = 1,
     dim = 2,
@@ -22,7 +22,7 @@ enum class style {
     overline = 53
 };
 
-enum class fg {
+enum class fg : uint8_t {
     black = 30,
     red = 31,
     green = 32,
@@ -42,7 +42,7 @@ enum class fg {
     bright_white = 97
 };
 
-enum class bg {
+enum class bg : uint8_t {
     black = 40,
     red = 41,
     green = 42,
