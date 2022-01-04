@@ -1,10 +1,22 @@
 #include "window.hpp"
 #include <stdexcept>
 #include "private/conversion.hpp"
+#include "private/platform.hpp"
 
 using namespace std;
 
-namespace Term {
+bool Term::operator==(const Term::fgColor &c1, const Term::fgColor &c2) {
+    if (c1.is_rgb() != c2.is_rgb()) return false;
+    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
+    return (c1.get_fg() == c2.get_fg());
+}
+
+bool Term::operator==(const Term::bgColor &c1, const Term::bgColor &c2) {
+    if (c1.is_rgb() != c2.is_rgb()) return false;
+    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
+    return (c1.get_bg() == c2.get_bg());
+}
+
 
 void Term::Window::assure_pos(size_t x, size_t y){
     if (y >= h) {
@@ -30,13 +42,14 @@ void Term::Window::assure_pos(size_t x, size_t y){
 }
 
 Term::Window Term::Window::merge_children() const {
-    Window res(w, h, false);
+    Window res(w, h);
     res.grid = grid;
     res.cursor_x = cursor_x;
     res.cursor_y = cursor_y;
     for (const ChildWindow &child : children) {
+        if (!child.is_visible()) continue;
         // in case there are nested children:
-        Window mc = child.merge_children();
+        // Window mc = child.merge_children(); // TODO: activate that later
         // merge grid:
         for (size_t y = 0; y < child.h; ++y) {
             size_t pos_y = y + child.offset_y;
@@ -44,65 +57,101 @@ Term::Window Term::Window::merge_children() const {
             for (size_t x = 0; y < child.w; ++x) {
                 size_t pos_x = x + child.offset_x;
                 if (pos_x >= w) break;
-                res.grid[pos_y][pos_x] = mc.get_cell(x, y);
-            }
+                res.set_cell(pos_x, pos_y, child.get_cell(x, y)); //later: mc.get_cell
+            }<
         }
         // draw border:
         res.print_rect(
             child.offset_x ? child.offset_x - 1 : 0,
             child.offset_y ? child.offset_y - 1 : 0,
             child.w + 2,
-            child.h + 2
+            child.h + 2,
+            child.border
         );
     }
     return res;
 }
 
-char32_t Term::Window::get_char(size_t x, size_t y) {
+char32_t Term::Window::get_char(size_t x, size_t y) const {
     if (y < h && x < grid[y].size())
         return grid[y][x].ch;
     else return U' ';
 }
 
-Term::fgColor Term::Window::get_fg(size_t x, size_t y) {
+Term::fgColor Term::Window::get_fg(size_t x, size_t y) const {
     if (y < h && x < grid[y].size())
         return grid[y][x].cell_fg;
     else return fg::reset;
 }
 
-Term::bgColor Term::Window::get_bg(size_t x, size_t y) {
+Term::bgColor Term::Window::get_bg(size_t x, size_t y) const {
    if (y < h && x < grid[y].size())
         return grid[y][x].cell_bg;
     else return bg::reset;
 }
 
-Term::style Term::Window::get_style(size_t x, size_t y) {
+Term::style Term::Window::get_style(size_t x, size_t y) const {
     if (y < h && x < grid[y].size())
         return grid[y][x].cell_style;
     else return style::reset;
 }
 
-Term::Cell Term::Window::get_cell(size_t x, size_t y) {
+Term::Cell Term::Window::get_cell(size_t x, size_t y) const {
     if (y < h && x < grid[y].size())
         return grid[y][x];
     else return Cell();
 }
 
-size_t Term::Window::get_w() {
+void Term::Window::set_cell(size_t x, size_t y, const Term::Cell &c) {
+    assure_pos(x, y);
+    grid[y][x] = c;
+}
+
+size_t Term::Window::get_w() const {
     return w;
 }
 
-size_t Term::Window::get_h() {
+size_t Term::Window::get_h() const {
     return h;
 }
 
-size_t Term::Window::get_cursor_x() {
+bool Term::Window::is_auto_growing() const {
+    return auto_growing;
+}
+
+void Term::Window::set_auto_growing(bool grow) {
+    auto_growing = grow;
+}
+
+bool Term::Window::is_auto_newline() const {
+    return auto_newline;
+}
+
+void Term::Window::set_auto_newline(bool a) {
+    auto_newline = a;
+}
+
+
+size_t Term::Window::get_cursor_x() const {
     return cursor_x;
 }
 
-size_t Term::Window::get_cursor_y() {
+size_t Term::Window::get_cursor_y() const {
     return cursor_y;
 }
+
+bool Term::Window::get_cursor_visibility() const {
+    return cursor_visible;
+}
+
+void Term::Window::show_cursor() {
+    cursor_visible = true;
+}
+
+void Term::Window::hide_cursor() {
+    cursor_visible = false;
+}
+
 
 
 size_t Term::Window::get_indent() {
@@ -188,6 +237,11 @@ void Term::Window::set_w(size_t new_w) {
     }
 }
 
+void Term::Window::resize(size_t new_w, size_t new_h) {
+    set_w(new_w);
+    set_h(new_h);
+}
+
 void Term::Window::set_indent(size_t i) {
     if (indent < w || auto_growing) indent = i;
     else indent = w - 1;
@@ -198,12 +252,12 @@ void Term::Window::print_str(const std::u32string& s)
     size_t x = cursor_x;
     size_t y = cursor_y;
     for (char32_t i : s) {
-        bool newline = (i == U'\n' || (x >= w && auto_newline && !auto_growing));
+        bool newline = (i == U'\n' || (x >= w && auto_newline));
         if (newline) {
             x = indent;
             ++y;
             if ((x < w && y < h) || auto_growing) {
-                for (int j = 0; j < indent; j++) {
+                for (size_t j = 0; j < indent; j++) {
                     set_char(x + j, y, U' ');
                     set_fg(x + j, y, active_fg);
                     set_bg(x + j, y, active_bg);
@@ -214,7 +268,7 @@ void Term::Window::print_str(const std::u32string& s)
                 return;
             }
         }
-        if (i != U'n') {
+        if (i != U'\n') {
             if ((x < w && y < h) || auto_growing) {
                 set_char(x, y, i);
                 set_fg(x, y, active_fg);
@@ -267,8 +321,8 @@ void Term::Window::fill_style(int x1, int y1, int x2, int y2, style st) {
 void Term::Window::print_rect(
     size_t x1,
     size_t y1,
-    size_t x2,
-    size_t y2,
+    size_t width,
+    size_t height,
     border_type b,
     fgColor color
 )
@@ -285,7 +339,8 @@ void Term::Window::print_rect(
     case border_type::utf2 : border = U"║═╔╗╚╝"; break;
     default: throw runtime_error ("undefined border value");
     }
-    for (size_t y = y1 + 1; y < y2 - 1 && y < h; ++y) {
+    size_t x2 = x1 + width, y2 = y1 + height;
+    for (size_t y = y1 + 1; y < y2 && y < h; ++y) {
         set_char(x1, y, border[0]);
         set_fg(x1, y, color);
         if (x2 < w) {
@@ -293,7 +348,7 @@ void Term::Window::print_rect(
             set_fg(x2, y, color);
         }
     }
-    for (size_t x = x1 + 1; x < x2 - 1 && x < w; ++x) {
+    for (size_t x = x1 + 1; x < x2 && x < w; ++x) {
         set_char(x, y1, border[1]);
         set_fg(x, y1, color);
         if (y2 < h) {
@@ -383,26 +438,103 @@ std::string Term::Window::render() {
         out.append(color(style::reset));
     if (is_main_window) {
         out.append(move_cursor(cursor_y + 1, cursor_x + 1));
-        out.append(cursor_on());
+        if (cursor_visible) out.append(cursor_on());
     }
     return out;
 };
 
 Term::Window Term::Window::cutout(size_t x0, size_t y0, size_t width, size_t height) const {
-    Window cropped(width, height, auto_growing);
+    Window cropped(width, height);
     for (size_t y = y0; y != y0 + height && y < h; ++y) {
         for (size_t x = x0; x != x0 + width && x < grid[y].size(); ++x) {
             cropped.grid[y].push_back(grid[y][x]);
         }
     }
+    // preserve cursor if within cut-out
+    if (cursor_x < x0 || cursor_x >= x0 + width || cursor_y < y0 || cursor_y >= y0 + height) {
+        cropped.set_cursor(0, 0);
+    }
+    else {
+        cropped.set_cursor(cursor_x - x0, cursor_y - y0);
+    }
     return cropped;
 }
 
-size_t Term::Window::make_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b, bool grow) {
+size_t Term::Window::new_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b) {
     size_t n = children.size();
-    children.push_back(ChildWindow(o_x, o_y, w_, h_, b, grow));
+    ChildWindow cwin(o_x, o_y, w_, h_, b);
+    children.push_back(cwin);
     return n;
 }
 
+Term::ChildWindow * Term::Window::get_child(size_t i) {
+    if (i < children.size()) return &children[i];
+    throw runtime_error("Term::Window::get_child(): bad child index");
+}
 
-}  // namespace Term
+size_t Term::Window::get_children_count() const {
+    return children.size();
+}
+
+void Term::Window::get_cursor_from_child(size_t i) {
+    if (i >= children.size() || !children[i].is_visible()) return;
+    size_t x = cursor_x, y = cursor_y;
+    x += children[i].get_offset_x() + children[i].get_cursor_x();
+    y += children[i].get_offset_y() + children[i].get_offset_y();
+    if (x >= w || y >= h) return;
+    cursor_x = x;
+    cursor_y = y;
+}
+
+//TODO:
+
+void Term::Window::get_cursor_from_child(std::vector<size_t>) {
+
+}
+
+/*********************
+ * Term::ChildWindow
+ *********************
+ */
+
+size_t Term::ChildWindow::get_offset_x() const {
+    return offset_x;
+}
+
+size_t Term::ChildWindow::get_offset_y() const {
+    return offset_y;
+}
+
+void Term::ChildWindow::move_to(size_t x, size_t y) {
+    offset_x = x;
+    offset_y = y;
+}
+
+Term::border_type Term::ChildWindow::get_border() const {
+    return border;
+}
+
+void Term::ChildWindow::set_border(Term::border_type b) {
+    border = b;
+}
+
+void Term::ChildWindow::show() {
+    visible = true;
+}
+
+void Term::ChildWindow::hide() {
+    visible = false;
+}
+
+bool Term::ChildWindow::is_visible() const {
+    return visible;
+}
+
+
+Term::TerminalWindow::TerminalWindow(bool disable_ctrl_c)
+:   Terminal(true, true, disable_ctrl_c),
+    win(80,30) {
+    int h, w;
+    Private::get_term_size(h, w);
+    win.resize(w, h);
+}

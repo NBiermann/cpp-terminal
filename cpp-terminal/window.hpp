@@ -1,4 +1,6 @@
 #pragma once
+#ifndef wIndOW_HeaDERguARd
+#define wIndOW_HeaDERguARd
 
 #include "base.hpp"
 #include <string>
@@ -16,6 +18,7 @@ namespace Term {
  * that could handle those, we simply use a Unicode code point as a character.
  */
 
+
 enum class border_type : uint8_t {
     no_border,
     blank,
@@ -25,7 +28,6 @@ enum class border_type : uint8_t {
 };
 
 class Color {
-    friend class Window;
 protected :
  	bool rgb_mode;
 	uint8_t r, g;
@@ -34,8 +36,8 @@ protected :
 		Term::fg fg_val;
 		Term::bg bg_val;
 	};
-	Color(const Term::fg val) : rgb_mode(false), fg_val(val) {}
-	Color(const Term::bg val) : rgb_mode(false), bg_val(val) {}
+	Color(const Term::fg val) : rgb_mode(false), r(0), g(0), fg_val(val) {}
+	Color(const Term::bg val) : rgb_mode(false), r(0), g(0), bg_val(val) {}
 public :
     Color(const uint8_t r_, const uint8_t g_, const uint8_t b_) : rgb_mode(true), r(r_), g(g_), b(b_) {}
     bool is_rgb() const {return rgb_mode;}
@@ -43,8 +45,6 @@ public :
     uint8_t get_r() const {return r;}
     uint8_t get_g() const {return g;}
     uint8_t get_b() const {return b;}
-    virtual fg get_fg() const;
-    virtual bg get_bg() const;
     virtual std::string render() = 0;
     virtual bool is_reset() = 0;
 };
@@ -52,6 +52,7 @@ public :
 class fgColor : public Color  {
     friend class Window;
 public :
+    fgColor() : Color(fg::reset) {}
     fgColor(fg c) : Color(c) {}
     fgColor(const uint8_t r_, const uint8_t g_, const uint8_t b_) : Color(r_, g_, b_) {}
     fg get_fg() const {return fg_val;}
@@ -64,15 +65,12 @@ public :
     }
 };
 
-bool operator==(const fgColor &c1, const fgColor &c2) {
-    if (c1.is_rgb() != c2.is_rgb()) return false;
-    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
-    return (c1.get_fg() == c2.get_fg());
-}
+bool operator==(const fgColor &, const fgColor &);
 
 class bgColor : public Color {
     friend class Window;
 public :
+    bgColor() : Color(bg::reset) {}
     bgColor(bg c) : Color(c) {}
     bgColor(const uint8_t r_, const uint8_t g_, const uint8_t b_) : Color(r_, g_, b_) {}
     bg get_bg() const {return bg_val;}
@@ -85,11 +83,7 @@ public :
     }
 };
 
-bool operator==(const bgColor &c1, const bgColor &c2) {
-    if (c1.is_rgb() != c2.is_rgb()) return false;
-    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
-    return (c1.get_bg() == c2.get_bg());
-}
+bool operator==(const bgColor &c1, const bgColor &c2);
 
 class Cell {
     friend class Window;
@@ -109,9 +103,11 @@ class Window {
     size_t w, h;                  // width and height of the window
     bool is_main_window;
     bool auto_growing;
-    size_t cursor_x, cursor_y;    // current cursor position
-    size_t indent;
     bool auto_newline;
+    size_t cursor_x, cursor_y;    // current cursor position
+    bool cursor_visible;
+    size_t indent;
+
     fgColor active_fg;
     bgColor active_bg;
     style active_style;
@@ -122,41 +118,54 @@ class Window {
     Window merge_children() const;
 
    public :
-    Window(size_t w_, size_t h_, bool grow = false)
+    Window(size_t w_, size_t h_)
         : w{w_},
           h{h_},
           is_main_window(true),
-          auto_growing(grow),
+          auto_growing(false),
+          auto_newline(true),
           cursor_x{0},
           cursor_y{0},
+          cursor_visible(true),
           indent(0),
-          auto_newline(true),
+
           active_fg(fgColor(fg::reset)),
           active_bg(bgColor(bg::reset)),
           active_style(style::reset),
           grid(h_)
     {}
 
-    size_t get_w();
+    size_t get_w() const;
     void set_w(size_t);
 
-    size_t get_h();
+    size_t get_h() const;
     void set_h(size_t);
+    void resize(size_t, size_t);
 
+    bool is_auto_growing() const;
+    void set_auto_growing(bool);
 
-    size_t get_cursor_x();
-    size_t get_cursor_y();
+    bool is_auto_newline() const;
+    void set_auto_newline(bool);
+
+    size_t get_cursor_x() const;
+    size_t get_cursor_y() const;
     void set_cursor(size_t, size_t);
+
+    bool get_cursor_visibility() const;
+    void show_cursor();
+    void hide_cursor();
 
     size_t get_indent();
     void set_indent(size_t);
 
-    char32_t get_char(size_t, size_t);
+    char32_t get_char(size_t, size_t) const;
 
-    fgColor get_fg(size_t, size_t);
-    bgColor get_bg(size_t, size_t);
-    style get_style(size_t, size_t);
-    Cell get_cell(size_t, size_t);
+    fgColor get_fg(size_t, size_t) const;
+    bgColor get_bg(size_t, size_t) const;
+    style get_style(size_t, size_t) const;
+    Cell get_cell(size_t, size_t) const;
+    void set_cell(size_t, size_t, const Cell&);
 
     void set_char(size_t, size_t, char32_t);
     void set_fg(size_t, size_t, fgColor);
@@ -189,7 +198,11 @@ class Window {
 
     std::string render();
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
-    size_t make_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1, bool grow = false);
+    size_t new_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1);
+    ChildWindow * get_child(size_t);
+    size_t get_children_count() const;
+    void get_cursor_from_child(size_t);
+    void get_cursor_from_child(std::vector<size_t>);
 };
 
 class ChildWindow : public Window {
@@ -198,8 +211,8 @@ class ChildWindow : public Window {
     border_type border;
     bool visible;
 
-    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1, bool grow = false)
-        : Window(w_, h_, grow),
+    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1)
+        : Window(w_, h_),
           offset_x(o_x),
           offset_y(o_y),
           border(b),
@@ -209,10 +222,22 @@ class ChildWindow : public Window {
 }
 
 public :
-    void show() {visible = true;}
-    void hide() {visible = false;}
-    bool is_visible() {return visible;}
+    size_t get_offset_x() const;
+    size_t get_offset_y() const;
+    void move_to(size_t, size_t);
+    border_type get_border() const;
+    void set_border(border_type);
+    void show();
+    void hide();
+    bool is_visible() const;
 };
 
+class TerminalWindow : public Terminal {
+public:
+    Window win;
+    TerminalWindow(bool disable_ctrl_c = false);
+};
 
 }  // namespace Term
+#endif // wIndOW_HeaDERguARd
+
