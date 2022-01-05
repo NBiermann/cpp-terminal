@@ -4,7 +4,6 @@
 #include "private/conversion.hpp"
 #include "private/platform.hpp"
 
-bool debug = false;
 
 std::string Term::color(style value) {
     return "\033[" + std::to_string(static_cast<unsigned int>(value)) + 'm';
@@ -113,34 +112,34 @@ void Term::get_cursor_position(int& rows, int& cols) {
         }
     }
     // Find the result in the response, drop the rest:
-    for (unsigned int i = 0; i != buf.size(); i++) {
-        if (buf[i] == U'\x1b' && buf[i + 1] == U'[') {
-            if (Private::convert_string_to_int(buf.substr(i + 2).c_str(), "%d;%d", &rows,
-                                               &cols) != 2) {
-                throw std::runtime_error(
-                    "get_cursor_position(): result could not be parsed");
-            }
-            return;
-        }
+    size_t i = buf.find("\x1b[");
+    if (i == std::string::npos)
+        throw std::runtime_error(
+            "get_cursor_position(): result not found in the response");
+    if (Private::convert_string_to_int(buf.substr(i + 2).c_str(), "%d;%d", &rows, &cols) != 2) {
+        throw std::runtime_error(
+            "get_cursor_position(): result could not be parsed");
     }
-    throw std::runtime_error(
-        "get_cursor_position(): result not found in the response");
+    return;
 }
 
-Term::Terminal::Terminal(bool _clear_screen,
-                         bool enable_keyboard,
-                         bool disable_ctrl_c)
-    : BaseTerminal(enable_keyboard, disable_ctrl_c),
-      clear_screen{_clear_screen} {
+Term::Terminal::Terminal(int options)
+    : BaseTerminal(bool(options & RAW_INPUT), bool(options & DISABLE_CTRL_C))
+    , clear_screen{bool(options & CLEAR_SCREEN)}
+{
     if (clear_screen)
         save_screen();
 }
+
 Term::Terminal::Terminal(bool _clear_screen)
     : BaseTerminal(false, true), clear_screen{_clear_screen} {
     if (clear_screen)
         save_screen();
 }
+
 Term::Terminal::~Terminal() {
-    if (clear_screen)
+    if (clear_screen) {
+        std::cout << Term::clear_screen() << Term::move_cursor(0, 0) << std::flush;
         restore_screen();
+    }
 }

@@ -13,6 +13,8 @@
 #include <stdexcept>
 
 namespace Term::Private {
+extern bool debug;
+
 // Returns true if the standard input is attached to a terminal
 bool is_stdin_a_tty();
 // Returns true if the standard output is attached to a terminal
@@ -35,6 +37,7 @@ bool read_raw(char32_t* s);
  * something goes wrong.
  */
 class BaseTerminal {
+   friend bool read_raw(char32_t*);
    private:
 #ifdef _WIN32
     HANDLE hout;
@@ -46,13 +49,16 @@ class BaseTerminal {
     DWORD dwOriginalInMode{};
     UINT in_code_page;
 #else
-    struct termios orig_termios {};
+    struct termios orig_termios{};
 #endif
     bool keyboard_enabled{};
 
-   public:
-    explicit BaseTerminal(bool enable_keyboard = false,
-                          bool disable_ctrl_c = true);
+  protected:
+    static bool disable_ctrl_c;
+
+  public:
+    explicit BaseTerminal(bool _enable_keyboard = false,
+                          bool _disable_ctrl_c = true);
 
     virtual ~BaseTerminal() noexcept(false);
 };

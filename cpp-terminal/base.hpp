@@ -1,12 +1,16 @@
 #pragma once
 
 #include <string>
-// TODO: remove include
 #include "private/platform.hpp"
 
 namespace Term {
 
-extern bool debug;
+enum {
+    NONE = 0,
+    CLEAR_SCREEN = 1,
+    RAW_INPUT = 2,
+    DISABLE_CTRL_C = 4
+};
 
 enum class style : uint8_t {
     reset = 0,
@@ -113,11 +117,11 @@ class Terminal : public Private::BaseTerminal {
     bool clear_screen{};
 
    public:
-    Terminal(bool _clear_screen, bool enable_keyboard, bool disable_ctrl_c);
+    Terminal(int options = CLEAR_SCREEN);
     // providing no parameters will disable the keyboard and ctrl+c
     Terminal(bool _clear_screen);
 
-    virtual ~Terminal() override;
+    ~Terminal();
 };
 
 }  // namespace Term

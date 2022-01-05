@@ -11,6 +11,8 @@
 #include <thread>
 
 
+bool Term::Private::debug = false;
+
 bool Term::Private::is_stdin_a_tty() {
 #ifdef _WIN32
     return _isatty(_fileno(stdin));
@@ -65,6 +67,10 @@ bool Term::Private::read_raw(char32_t* s) {
     if (i == EOF) throw std::runtime_error("_getch() failed");
     if (debug)
         std::cout << "(raw: " << Private::to_hex((int) i);
+
+    if (i == 3 && !BaseTerminal::disable_ctrl_c) {
+        exit (1);
+    }
 
     // A few special key combinations are rendered by Windows as 2
     // numbers, requiring another _getwch() call. The first number is always null:
@@ -179,9 +185,10 @@ Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
 }
 
 #ifdef _WIN32
-Term::Private::BaseTerminal::BaseTerminal(bool enable_keyboard,
-                                          bool /*disable_ctrl_c*/)
-    : keyboard_enabled{enable_keyboard} {
+Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_ctrl_c)
+    : keyboard_enabled{_enable_keyboard}
+{
+    disable_ctrl_c = _disable_ctrl_c;
     // Uncomment this to silently disable raw mode for non-tty
     // if (keyboard_enabled) keyboard_enabled = is_stdin_a_tty();
     out_console = is_stdout_a_tty();
@@ -216,14 +223,16 @@ Term::Private::BaseTerminal::BaseTerminal(bool enable_keyboard,
         DWORD flags = dwOriginalInMode;
         flags |= ENABLE_VIRTUAL_TERMINAL_INPUT;
         flags &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+        flags &= ~ENABLE_PROCESSED_INPUT; // report ctrl-c as keyboard input rather than as a signal
         if (!SetConsoleMode(hin, flags)) {
             throw std::runtime_error("SetConsoleMode() failed");
         }
     }
 #else
-Term::Private::BaseTerminal::BaseTerminal(bool enable_keyboard,
-                                          bool disable_ctrl_c)
-    : keyboard_enabled{enable_keyboard} {
+Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_ctrl_c)
+    : keyboard_enabled{_enable_keyboard}
+{
+    disable_ctrl_c = _disable_ctrl_c;
     // Uncomment this to silently disable raw mode for non-tty
     // if (keyboard_enabled) keyboard_enabled = is_stdin_a_tty();
     if (keyboard_enabled) {
@@ -252,3 +261,5 @@ Term::Private::BaseTerminal::BaseTerminal(bool enable_keyboard,
     }
 #endif
 }
+
+bool Term::Private::BaseTerminal::disable_ctrl_c = false;
