@@ -9,6 +9,95 @@
 
 namespace Term {
 
+enum class border_type : uint8_t {
+    NO_BORDER,
+    BLANK,
+    ASCII,
+    LINE,
+    DOUBLE_LINE
+};
+
+// Represents a color either as 8-bit ANSI color code or as 24-bit rgb
+class Color {
+protected :
+ 	bool rgb_mode;
+	uint8_t r, g;
+	union {
+		uint8_t b;
+		fg fg_val;
+		bg bg_val;
+	};
+	Color(const Term::fg);
+	Color(const Term::bg);
+	Color(const uint8_t, const uint8_t, const uint8_t);
+public :
+    bool is_rgb() const;
+    uint8_t get_r() const;
+    uint8_t get_g() const;
+    uint8_t get_b() const;
+    virtual std::string render() = 0;
+    virtual bool is_reset() = 0;
+    virtual ~Color() = default;
+};
+
+// foreground color
+class fgColor : public Color  {
+    friend class Window;
+public :
+    fgColor();
+    fgColor(fg c);
+    fgColor(const uint8_t, const uint8_t, const uint8_t);
+    fg get_fg() const;
+    std::string render() override;
+    bool is_reset() override;
+};
+
+bool operator==(const fgColor &, const fgColor &);
+bool operator!=(const fgColor &, const fgColor &);
+
+// background color
+class bgColor : public Color {
+    friend class Window;
+public :
+    bgColor();
+    bgColor(bg);
+    bgColor(const uint8_t, const uint8_t, const uint8_t);
+    bg get_bg() const;
+    std::string render () override;
+    bool is_reset() override;
+};
+
+bool operator==(const bgColor &c1, const bgColor &c2);
+bool operator!=(const bgColor &c1, const bgColor &c2);
+
+/* Represents a position in the terminal window, holding the character,
+ * foreground and background colors, and the style of this specific cell.
+ */
+struct Cell {
+	fgColor cell_fg;
+	bgColor cell_bg;
+	style cell_style;
+    char32_t ch;
+    Cell()
+        : cell_fg(fg::reset)
+        , cell_bg(bg::reset)
+        , cell_style(style::reset)
+        , ch(U' ') {}
+    Cell(char32_t c)
+        : cell_fg(fg::reset)
+        , cell_bg(bg::reset)
+        , cell_style(style::reset)
+        , ch(c) {}
+    Cell(char32_t c, fgColor a_fg, bgColor a_bg, style a_style)
+        : cell_fg(a_fg)
+        , cell_bg(a_bg)
+        , cell_style(a_style)
+        , ch(c) {}
+};
+
+
+class ChildWindow; // forward declaration
+
 /* Represents a rectangular window, as a 2D array of characters and their
  * attributes. The render method can convert this internal representation to a
  * string that when printed will show the Window on the screen.
@@ -18,149 +107,65 @@ namespace Term {
  * a "unicode grapheme cluster", but due to a lack of a good library for C++
  * that could handle those, we simply use a Unicode code point as a character.
  */
-
-
-enum class border_type : uint8_t {
-    no_border,
-    blank,
-    ascii,
-    utf1,
-    utf2
-};
-
-class Color {
-protected :
- 	bool rgb_mode;
-	uint8_t r, g;
-	union {
-		uint8_t b;
-		Term::fg fg_val;
-		Term::bg bg_val;
-	};
-	Color(const Term::fg val) : rgb_mode(false), r(0), g(0), fg_val(val) {}
-	Color(const Term::bg val) : rgb_mode(false), r(0), g(0), bg_val(val) {}
-public :
-    Color(const uint8_t r_, const uint8_t g_, const uint8_t b_) : rgb_mode(true), r(r_), g(g_), b(b_) {}
-    bool is_rgb() const {return rgb_mode;}
-    uint8_t get_r() const {return r;}
-    uint8_t get_g() const {return g;}
-    uint8_t get_b() const {return b;}
-    virtual std::string render() = 0;
-    virtual bool is_reset() = 0;
-};
-
-class fgColor : public Color  {
-    friend class Window;
-public :
-    fgColor() : Color(fg::reset) {}
-    fgColor(fg c) : Color(c) {}
-    fgColor(const uint8_t r_, const uint8_t g_, const uint8_t b_) : Color(r_, g_, b_) {}
-    fg get_fg() const {return fg_val;}
-    std::string render() {
-        if (rgb_mode) return Term::color24_fg(r, g, b);
-        else return Term::color(fg_val);
-    }
-    bool is_reset() {
-        return (rgb_mode == false && fg_val == fg::reset);
-    }
-};
-
-bool operator==(const fgColor &, const fgColor &);
-bool operator!=(const fgColor &, const fgColor &);
-
-class bgColor : public Color {
-    friend class Window;
-public :
-    bgColor() : Color(bg::reset) {}
-    bgColor(bg c) : Color(c) {}
-    bgColor(const uint8_t r_, const uint8_t g_, const uint8_t b_) : Color(r_, g_, b_) {}
-    bg get_bg() const {return bg_val;}
-    std::string render() {
-        if (rgb_mode) return Term::color24_bg(r, g, b);
-        else return Term::color(bg_val);
-    }
-    bool is_reset() {
-        return (rgb_mode == false && bg_val == bg::reset);
-    }
-};
-
-bool operator==(const bgColor &c1, const bgColor &c2);
-bool operator!=(const bgColor &c1, const bgColor &c2);
-
-class Cell {
-    friend class Window;
-	char32_t ch;
-	fgColor cell_fg;
-	bgColor cell_bg;
-	style cell_style;
-public :
-    Cell() : ch(U' '), cell_fg(fg::reset), cell_bg(bg::reset), cell_style(style::reset) {}
-    Cell(char32_t c) : ch(c), cell_fg(fg::reset), cell_bg(bg::reset), cell_style(style::reset) {}
-};
-
-class ChildWindow; // forward declaration
-
 class Window {
    protected :
-    size_t w{}, h{};                  // width and height of the window
-    bool is_main_window{};
-    bool auto_growing{};
-    bool auto_newline{};
-    size_t cursor_x{}, cursor_y{};    // current cursor position
-    bool cursor_visible{};
-    size_t indent{}, tabsize{};
+    size_t w{}, h{};               // width and height of the window
+    bool fixed_width{};            // if w may not grow automatically
+    bool fixed_height{};           // same for h
+    bool cursor_visibility{};
+    size_t cursor_x{}, cursor_y{}; // current cursor position
+    size_t tabsize{};
 
-    fgColor active_fg;
-    bgColor active_bg;
-    style active_style{};
-    std::vector<std::vector<Cell>> grid;  // the cells (grid[0] is top row)
+    fgColor default_fg;
+    bgColor default_bg;
+    style default_style{};
+    std::vector<std::vector<Cell>> grid; // the cells (grid[0] is top row)
     std::vector<ChildWindow> children;
 
     void assure_pos(size_t x, size_t y);
     Window merge_children() const;
 
    public :
-    Window(size_t w_, size_t h_)
+    Window(size_t w_ = 0, size_t h_ = 0)
         : w{w_},
           h{h_},
-          is_main_window(true),
-          auto_growing(false),
-          auto_newline(true),
+          fixed_width(true),
+          fixed_height(true),
+          cursor_visibility(true),
           cursor_x{0},
           cursor_y{0},
-          cursor_visible(true),
-          indent(0),
           tabsize(0),
 
-          active_fg(fgColor(fg::reset)),
-          active_bg(bgColor(bg::reset)),
-          active_style(style::reset),
+          default_fg(fgColor(fg::reset)),
+          default_bg(bgColor(bg::reset)),
+          default_style(style::reset),
           grid(h_)
     {}
+    virtual ~Window() = default;
+
+    virtual bool is_main_window() {return true;}
 
     size_t get_w() const;
     void set_w(size_t);
 
     size_t get_h() const;
     void set_h(size_t);
+
     void resize(size_t, size_t);
 
-    bool is_auto_growing() const;
-    void set_auto_growing(bool);
+    bool is_fixed_width() const;
+    void set_fixed_width (bool);
 
-    bool is_auto_newline() const;
-    void set_auto_newline(bool);
+    bool is_fixed_height() const;
+    void set_fixed_height (bool);
 
     size_t get_cursor_x() const;
     size_t get_cursor_y() const;
     void set_cursor(size_t, size_t);
 
-    bool get_cursor_visibility() const;
+    bool is_cursor_visible() const;
     void show_cursor();
     void hide_cursor();
-
-    size_t get_indent() const;
-    void set_indent(size_t);
 
     size_t get_tabsize() const;
     void set_tabsize(size_t);
@@ -170,12 +175,10 @@ class Window {
 
     fgColor get_fg(size_t, size_t) const;
     void set_fg(size_t, size_t, fgColor);
-    void set_fg(size_t, size_t, fg);
     void set_fg(size_t, size_t, uint8_t, uint8_t, uint8_t);
 
     bgColor get_bg(size_t, size_t) const;
     void set_bg(size_t, size_t, bgColor);
-    void set_bg(size_t, size_t, bg);
     void set_bg(size_t, size_t, uint8_t, uint8_t, uint8_t);
 
     style get_style(size_t, size_t) const;
@@ -190,58 +193,71 @@ class Window {
     void clear_grid();
 
 
-    void choose_fg(fg);
-    void choose_fg(uint8_t, uint8_t, uint8_t);
-    void choose_bg(bg);
-    void choose_bg(uint8_t, uint8_t, uint8_t);
-    void choose_style(style);
+    void set_default_fg(fgColor);
+    void set_default_fg(uint8_t, uint8_t, uint8_t);
+    void set_default_bg(bgColor);
+    void set_default_bg(uint8_t, uint8_t, uint8_t);
+    void set_default_style(style);
 
-    void print_str(const std::u32string&);
-    void print_str(const std::string&);
+    // Returns the number of characters actually printed
+    size_t print_str(const std::u32string&,
+                     fgColor = fg::unspecified,
+                     bgColor = bg::unspecified,
+                     style = style::unspecified);
+    size_t print_str(const std::string&,
+                     fgColor = fg::unspecified,
+                     bgColor = bg::unspecified,
+                     style = style::unspecified);
 
-    void fill_fg(int, int, int, int, fgColor);
-    void fill_bg(int, int, int, int, bgColor);
-    void fill_style(int, int, int, int, style);
+    void fill_fg(size_t, size_t, size_t, size_t, fgColor);
+    void fill_bg(size_t, size_t, size_t, size_t, bgColor);
+    void fill_style(size_t, size_t, size_t, size_t, style);
 
-    void print_rect(size_t, size_t, size_t, size_t, border_type = border_type::utf1, fgColor = fgColor(fg::reset), bgColor = bgColor(bg::reset));
+    void print_rect(size_t, size_t, size_t, size_t,
+                    border_type = border_type::LINE,
+                    fgColor = fgColor(fg::reset),
+                    bgColor = bgColor(bg::reset));
 
     void clear();
 
     void clear_row(size_t);
 
-    std::string render();
+    std::string render(size_t = 0, size_t = 0,
+                       size_t = std::string::npos, size_t = std::string::npos);
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
-    size_t new_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1);
+    size_t new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
+                     border_type b = border_type::LINE);
     ChildWindow * get_child(size_t);
     size_t get_children_count() const;
     void get_cursor_from_child(size_t);
     void get_cursor_from_child(const std::vector<size_t>&);
 };
 
+// Represents a sub-window. Child windows may be nested.
 class ChildWindow : public Window {
     friend Window;
     size_t offset_x{}, offset_y{};
     border_type border;
     fgColor border_fg;
     bgColor border_bg;
-    bool visible;
+    bool visible{};
 
-    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b = border_type::utf1)
+    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_,
+                border_type b = border_type::LINE)
         : Window(w_, h_),
           offset_x(o_x),
           offset_y(o_y),
           border(b),
           visible(false)
-{
-    is_main_window = false;
-}
+{}
 
 public :
+    bool is_main_window() override {return false;}
     size_t get_offset_x() const;
     size_t get_offset_y() const;
     void move_to(size_t, size_t);
     border_type get_border() const;
-    void set_border(border_type, fgColor = fgColor(fg::reset), bgColor = bgColor(bg::reset));
+    void set_border(border_type, fgColor = fg::reset, bgColor = bg::reset);
     void set_border_fg(fgColor);
     void set_border_bg(bgColor);
     void show();
@@ -249,11 +265,6 @@ public :
     bool is_visible() const;
 };
 
-class TerminalWindow : public Terminal {
-public:
-    Window win;
-    TerminalWindow(int options = CLEAR_SCREEN | RAW_INPUT);
-};
 
 }  // namespace Term
 #endif // wIndOW_HeaDERguARd

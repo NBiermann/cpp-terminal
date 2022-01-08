@@ -6,10 +6,11 @@
 namespace Term {
 
 enum {
-    NONE = 0,
-    CLEAR_SCREEN = 1,
-    RAW_INPUT = 2,
-    DISABLE_CTRL_C = 4
+    // Option flags for Terminal constructor
+    NONE = 0u,
+    CLEAR_SCREEN = 1u,
+    RAW_INPUT = 2u,
+    DISABLE_CTRL_C = 4u
 };
 
 enum class style : uint8_t {
@@ -23,7 +24,8 @@ enum class style : uint8_t {
     reversed = 7,
     conceal = 8,
     crossed = 9,
-    overline = 53
+    overline = 53,
+    unspecified = 253
 };
 
 enum class fg : uint8_t {
@@ -43,7 +45,8 @@ enum class fg : uint8_t {
     bright_blue = 94,
     bright_magenta = 95,
     bright_cyan = 96,
-    bright_white = 97
+    bright_white = 97,
+    unspecified = 254
 };
 
 enum class bg : uint8_t {
@@ -63,7 +66,8 @@ enum class bg : uint8_t {
     bright_blue = 104,
     bright_magenta = 105,
     bright_cyan = 106,
-    bright_white = 107
+    bright_white = 107,
+    unspecified = 255
 };
 
 std::string color(style);
@@ -111,17 +115,21 @@ void save_screen();
 
 void get_cursor_position(int&, int&);
 
+class Window;
+
 // initializes the terminal
 class Terminal : public Private::BaseTerminal {
    private:
+    size_t w{}, h{};
     bool clear_screen{};
 
    public:
-    Terminal(int options = CLEAR_SCREEN);
+    explicit Terminal(unsigned options = CLEAR_SCREEN);
     // providing no parameters will disable the keyboard and ctrl+c
-    Terminal(bool _clear_screen);
-
-    ~Terminal();
+    // explicit Terminal(bool a_clear_screen);
+    ~Terminal() override;
+    bool update_size();
+    void draw_window (Window&, size_t = 0, size_t = 0);
 };
 
 }  // namespace Term

@@ -48,7 +48,7 @@ inline void codepoint_to_utf8(std::string& s, char32_t c) {
         throw std::runtime_error("Invalid UTF32 codepoint.");
     }
     char bytes[4];
-    int nbytes = 1;
+    unsigned nbytes = 1;
     char32_t d = c;
     if (c >= 0x10000) {
         nbytes++;
@@ -113,19 +113,19 @@ inline int convert_string_to_int(const char* str,
 inline std::string to_hex(int i) {
     const std::string hexdigit = "0123456789abcdef";
     if (i == 0) return "0";
-    int r;
-    bool neg = false;
-    std::string h;
-    if (i < 0) {
-        neg = true;
+    bool negative = (i < 0);
+    if (negative) {
         i = -i;
     }
+    std::string h;
+    int r;
     while (i) {
         r = i % 16;
         i = i / 16;
         h = hexdigit.substr(r, 1) + h;
     }
-    return (neg ? "-" : "") + h;
+    if (negative) return "-" + h;
+    return h;
 }
 
 }  // namespace Term::Private

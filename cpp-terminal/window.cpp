@@ -5,14 +5,54 @@
 
 using namespace std;
 
+/***************
+   Term::Color
+ ***************/
+
+Term::Color::Color(const Term::fg val)
+    : rgb_mode(false), r(0), g(0), fg_val(val)
+{}
+
+Term::Color::Color(const Term::bg val)
+    : rgb_mode(false), r(0), g(0), bg_val(val)
+{}
+
+Term::Color::Color(const uint8_t a_r, const uint8_t a_g, const uint8_t a_b)
+    : rgb_mode(true), r(a_r), g(a_g), b(a_b)
+{}
+
+bool Term::Color::is_rgb() const {return rgb_mode;}
+uint8_t Term::Color::get_r() const {return r;}
+uint8_t Term::Color::get_g() const {return g;}
+uint8_t Term::Color::get_b() const {return b;}
+
+
 /*****************
- * Term::fgColor
- *****************
- */
+   Term::fgColor
+ *****************/
+
+Term::fgColor::fgColor() : Color(Term::fg::reset) {}
+Term::fgColor::fgColor(fg c) : Color(c) {}
+Term::fgColor::fgColor(const uint8_t a_r, const uint8_t a_g, const uint8_t a_b)
+        : Color(a_r, a_g, a_b)
+{}
+
+Term::fg Term::fgColor::get_fg() const {return fg_val;}
+
+std::string Term::fgColor::render() {
+    if (rgb_mode) return Term::color24_fg(r, g, b);
+    else return Term::color(fg_val);
+}
+
+bool Term::fgColor::is_reset() {
+    return (rgb_mode == false && fg_val == fg::reset);
+}
 
 bool Term::operator==(const Term::fgColor &c1, const Term::fgColor &c2) {
     if (c1.is_rgb() != c2.is_rgb()) return false;
-    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
+    if (c1.is_rgb()) return (c1.get_r() == c2.get_r()
+                             && c1.get_g() == c2.get_g()
+                             && c1.get_b() == c2.get_b());
     return (c1.get_fg() == c2.get_fg());
 }
 
@@ -20,14 +60,33 @@ bool Term::operator!=(const Term::fgColor &c1, const Term::fgColor &c2) {
     return !(c1 == c2);
 }
 
+
+
 /*****************
- * Term::bgColor
- *****************
- */
+   Term::bgColor
+ *****************/
+
+Term::bgColor::bgColor() : Color(Term::bg::reset) {}
+Term::bgColor::bgColor(bg c) : Color(c) {}
+Term::bgColor::bgColor(const uint8_t a_r, const uint8_t a_g, const uint8_t a_b)
+    : Color(a_r, a_g, a_b)
+{}
+Term::bg Term::bgColor::get_bg() const {return bg_val;}
+
+std::string Term::bgColor::render () {
+    if (rgb_mode) return Term::color24_bg(r, g, b);
+    else return Term::color(bg_val);
+}
+
+bool Term::bgColor::is_reset() {
+    return (rgb_mode == false && bg_val == bg::reset);
+}
 
 bool Term::operator==(const Term::bgColor &c1, const Term::bgColor &c2) {
     if (c1.is_rgb() != c2.is_rgb()) return false;
-    if (c1.is_rgb()) return (c1.get_r() == c2.get_r() && c1.get_g() == c2.get_g() && c1.get_b() == c2.get_b());
+    if (c1.is_rgb()) return (c1.get_r() == c2.get_r()
+                             && c1.get_g() == c2.get_g()
+                             && c1.get_b() == c2.get_b());
     return (c1.get_bg() == c2.get_bg());
 }
 
@@ -42,24 +101,16 @@ bool Term::operator!=(const Term::bgColor &c1, const Term::bgColor &c2) {
 
 void Term::Window::assure_pos(size_t x, size_t y){
     if (y >= h) {
-        if (auto_growing) {
-            h = y + 1;
-            grid.resize(h);
-        }
-        else {
-            throw std::runtime_error("y out of bounds");
-        }
+        if (fixed_height) throw std::runtime_error("y out of bounds");
+        h = y + 1;
+        grid.resize(h);
     }
     if (x >= w) {
-        if (auto_growing) {
-            w = x + 1;
-        }
-        else {
-            throw std::runtime_error("x out of bounds");
-        }
+        if (fixed_width) throw std::runtime_error("x out of bounds");
+        w = x + 1;
     }
     if (x >= grid[y].size()) {
-        grid[y].resize(w, Cell());
+        grid[y].resize(x + 1);
     }
 }
 
@@ -80,7 +131,7 @@ Term::Window Term::Window::merge_children() const {
             for (size_t x = 0; x < child.w; ++x) {
                 size_t pos_x = x + child.offset_x;
                 if (pos_x >= w) break;
-                res.set_cell(pos_x, pos_y, mc.get_cell(x, y)); //later: mc.get_cell
+                res.set_cell(pos_x, pos_y, mc.get_cell(x, y));
             }
         }
         // draw border:
@@ -98,33 +149,33 @@ Term::Window Term::Window::merge_children() const {
 }
 
 char32_t Term::Window::get_char(size_t x, size_t y) const {
-    if (y < h && x < grid[y].size())
+    if (y < grid.size() && x < grid[y].size())
         return grid[y][x].ch;
     else return U' ';
 }
 
 Term::fgColor Term::Window::get_fg(size_t x, size_t y) const {
-    if (y < h && x < grid[y].size())
+    if (y < grid.size() && x < grid[y].size())
         return grid[y][x].cell_fg;
-    else return fg::reset;
+    else return default_fg;
 }
 
 Term::bgColor Term::Window::get_bg(size_t x, size_t y) const {
-   if (y < h && x < grid[y].size())
+   if (y < grid.size() && x < grid[y].size())
         return grid[y][x].cell_bg;
-    else return bg::reset;
+    else return default_bg;
 }
 
 Term::style Term::Window::get_style(size_t x, size_t y) const {
-    if (y < h && x < grid[y].size())
+    if (y < grid.size() && x < grid[y].size())
         return grid[y][x].cell_style;
-    else return style::reset;
+    else return default_style;
 }
 
 Term::Cell Term::Window::get_cell(size_t x, size_t y) const {
-    if (y < h && x < grid[y].size())
+    if (y < grid.size() && x < grid[y].size())
         return grid[y][x];
-    else return Cell();
+    else return Cell(U' ', default_fg, default_bg, default_style);
 }
 
 void Term::Window::set_cell(size_t x, size_t y, const Term::Cell &c) {
@@ -140,13 +191,13 @@ vector<vector<Term::Cell>> Term::Window::get_grid() const {
 void Term::Window::set_grid(const vector<vector<Term::Cell>> &new_grid) {
     grid = new_grid;
     if (grid.size() > h) {
-        if (auto_growing) h = grid.size();
-        else grid.resize(h);
+        if (fixed_height) grid.resize(h);
+        else h = grid.size();
     }
     for (vector<Cell> &row : grid) {
         if (row.size() > w) {
-            if (auto_growing) w = row.size();
-            else row.resize(w);
+            if (fixed_width) row.resize(w);
+            else w = row.size();
         }
     }
 }
@@ -171,22 +222,21 @@ size_t Term::Window::get_h() const {
     return h;
 }
 
-bool Term::Window::is_auto_growing() const {
-    return auto_growing;
+bool Term::Window::is_fixed_width() const {
+    return fixed_width;
 }
 
-void Term::Window::set_auto_growing(bool grow) {
-    auto_growing = grow;
+void Term::Window::set_fixed_width(bool a) {
+    fixed_width = a;
 }
 
-bool Term::Window::is_auto_newline() const {
-    return auto_newline;
+bool Term::Window::is_fixed_height() const {
+    return fixed_height;
 }
 
-void Term::Window::set_auto_newline(bool a) {
-    auto_newline = a;
+void Term::Window::set_fixed_height(bool a) {
+    fixed_height = a;
 }
-
 
 size_t Term::Window::get_cursor_x() const {
     return cursor_x;
@@ -196,23 +246,19 @@ size_t Term::Window::get_cursor_y() const {
     return cursor_y;
 }
 
-bool Term::Window::get_cursor_visibility() const {
-    return cursor_visible;
+bool Term::Window::is_cursor_visible() const {
+    return cursor_visibility;
 }
 
 void Term::Window::show_cursor() {
-    cursor_visible = true;
+    cursor_visibility = true;
 }
 
 void Term::Window::hide_cursor() {
-    cursor_visible = false;
+    cursor_visibility = false;
 }
 
 
-
-size_t Term::Window::get_indent() const {
-    return indent;
-}
 
 void Term::Window::set_char(size_t x, size_t y, char32_t c) {
     assure_pos(x, y);
@@ -222,12 +268,12 @@ void Term::Window::set_char(size_t x, size_t y, char32_t c) {
 
 
 
-void Term::Window::choose_fg(fg c) {
-    active_fg = fgColor(c);
+void Term::Window::set_default_fg(fgColor c) {
+    default_fg = c;
 }
 
-void Term::Window::choose_fg(uint8_t r, uint8_t g, uint8_t b) {
-    active_fg = fgColor(r, g, b);
+void Term::Window::set_default_fg(uint8_t r, uint8_t g, uint8_t b) {
+    default_fg = fgColor(r, g, b);
 }
 
 void Term::Window::set_fg(size_t x, size_t y, fgColor c) {
@@ -235,22 +281,18 @@ void Term::Window::set_fg(size_t x, size_t y, fgColor c) {
     grid[y][x].cell_fg = c;
 }
 
-void Term::Window::set_fg(size_t x, size_t y, fg c) {
-    assure_pos(x, y);
-    grid[y][x].cell_fg = fgColor(c);
-}
-
-void Term::Window::set_fg(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b) {
+void Term::Window::set_fg(size_t x, size_t y,
+                          uint8_t r, uint8_t g, uint8_t b) {
     assure_pos(x, y);
     grid[y][x].cell_fg = fgColor(r, g, b);
 }
 
-void Term::Window::choose_bg(bg c) {
-    active_bg = bgColor(c);
+void Term::Window::set_default_bg(bgColor c) {
+    default_bg = c;
 }
 
-void Term::Window::choose_bg(uint8_t r, uint8_t g, uint8_t b) {
-    active_bg = bgColor(r, g, b);
+void Term::Window::set_default_bg(uint8_t r, uint8_t g, uint8_t b) {
+    default_bg = bgColor(r, g, b);
 }
 
 void Term::Window::set_bg(size_t x, size_t y, bgColor c) {
@@ -258,18 +300,14 @@ void Term::Window::set_bg(size_t x, size_t y, bgColor c) {
     grid[y][x].cell_bg = c;
 }
 
-void Term::Window::set_bg(size_t x, size_t y, bg c) {
-    assure_pos(x, y);
-    grid[y][x].cell_bg = bgColor(c);
-}
-
-void Term::Window::set_bg(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b) {
+void Term::Window::set_bg(size_t x, size_t y,
+                          uint8_t r, uint8_t g, uint8_t b) {
     assure_pos(x, y);
     grid[y][x].cell_bg = bgColor(r, g, b);
 }
 
-void Term::Window::choose_style(style c) {
-    active_style = c;
+void Term::Window::set_default_style(style c) {
+    default_style = c;
 }
 
 void Term::Window::set_style(size_t x, size_t y, style c) {
@@ -301,21 +339,6 @@ void Term::Window::resize(size_t new_w, size_t new_h) {
     set_h(new_h);
 }
 
-void Term::Window::set_indent(size_t i) {
-    if (i < w) {
-        indent = i;
-    }
-    else {
-        if (auto_growing) {
-            indent = i;
-            set_w(indent + 1);
-        }
-        else {
-            indent = w - 1;
-        }
-    }
-    if (cursor_x < indent) cursor_x = indent;
-}
 
 size_t Term::Window::get_tabsize() const {
     return tabsize;
@@ -326,72 +349,112 @@ void Term::Window::set_tabsize(size_t ts) {
 }
 
 
-void Term::Window::print_str(const std::u32string& s)
+size_t Term::Window::print_str(const std::u32string& s,
+                   fgColor a_fg, bgColor a_bg, style a_style)
 {
+    using Term::Key;
+    if (a_fg == fg::unspecified) a_fg = default_fg;
+    if (a_bg == bg::unspecified) a_bg = default_bg;
+    if (a_style == style::unspecified) a_style = default_style;
+    if (cursor_y >= h && fixed_height) {
+        // out of the window. Should not happen here, just to be sure.
+        cursor_y = h - 1;
+        if (cursor_x >= w) cursor_x = w - 1;
+        return 0;
+    }
     size_t x = cursor_x;
     size_t y = cursor_y;
-    for (char32_t i : s) {
-        bool newline = (i == Term::Key::ENTER || (x >= w && auto_newline));
+
+    size_t i = 0;
+    for (; i != s.size(); ++i) {
+        char32_t ch = s[i];
+        bool newline = (ch == ENTER || (x >= w && fixed_width));
         if (newline) {
-            if (y >= h - 1 && !auto_growing) {
-                // String is out of the window
-                return;
-            }
             ++y;
-            for (x = 0; x < indent; ++x) {
-            set_char(x, y, U' ');
-                set_fg(x, y, Term::fg::reset);
-                set_bg(x, y, Term::bg::reset);
-                set_style(x, y, Term::style::reset);
+            if (y == h && fixed_height) {
+                // out of the window
+                y = h - 1;
+                if (x >= w) x = w - 1;
+                break;
             }
+            x = 0;
+            if (ch == ENTER) continue;
         }
+
+        // New
         // TODO: tab
-        if (i >= U' ' && i < 0x00110000) {
-            if ((x < w && y < h) || auto_growing) {
-                set_char(x, y, i);
-                set_fg(x, y, active_fg);
-                set_bg(x, y, active_bg);
-                set_style(x, y, active_style);
-            } else {
-                // String is out of the window, but may
-                // come back into it after next '\n'
+        if (ch >= U' ' && ch <= UTF8_MAX) {
+            if ((x >= w && fixed_width) || (y >= h && fixed_height)) {
+                // out of the window
+                break;
+            }
+            set_char(x, y, ch);
+            set_fg(x, y, a_fg);
+            set_bg(x, y, a_bg);
+            set_style(x, y, a_style);
+            ++x;
+            if (x < w) continue;
+            // Right margin exceeded. We ignore that if next character in
+            // the string is '\n' anyway:
+            if (i + 1 != s.size() && s[i + 1] == ENTER) continue;
+            // if auto-growing is active, adjust the width of the window
+            if (!fixed_width) {
+                set_w(x);
                 continue;
             }
-            ++x;
-            //TODO: auto_newline?! move cursor to next row if right bond reached?
+            // Otherwise, begin new line ...
+            if (y < h - 1) {
+                ++y;
+                x = 0;
+                continue;
+            }
+            // ... or, if at bottom line, keep cursor in bottom right corner
+            y = h - 1;
+            x = w - 1;
+            // before break, count the character
+            ++i;
+            break;
         }
     }
     // set cursor
     cursor_x = x;
     cursor_y = y;
+    return i;
 }
 
-void Term::Window::print_str(const std::string& s)
+size_t Term::Window::print_str(const std::string& s,
+                   fgColor a_fg, bgColor a_bg, style a_style)
 {
     std::u32string s32 = Private::utf8_to_utf32(s);
-    print_str(s32);
+    return print_str(s32, a_fg, a_bg, a_style);
 }
 
 
-void Term::Window::fill_fg(int x1, int y1, int x2, int y2, fgColor color) {
-    for (int j = y1; j < y2; j++) {
-        for (int i = x1; i < x2; i++) {
+void Term::Window::fill_fg(size_t x1, size_t y1,
+                           size_t width, size_t height, fgColor color) {
+    if (color == fg::unspecified) color = default_fg;
+    for (size_t j = y1; j < y1 + height; j++) {
+        for (size_t i = x1; i < x1 + width; i++) {
             set_fg(i, j, color);
         }
     }
 }
 
-void Term::Window::fill_bg(int x1, int y1, int x2, int y2, bgColor color) {
-    for (int j = y1; j < y2; j++) {
-        for (int i = x1; i < x2; i++) {
+void Term::Window::fill_bg(size_t x1, size_t y1,
+                           size_t width, size_t height, bgColor color) {
+    if (color == bg::unspecified) color = default_bg;
+    for (size_t j = y1; j < y1 + height; j++) {
+        for (size_t i = x1; i < x1 + width; i++) {
             set_bg(i, j, color);
         }
     }
 }
 
-void Term::Window::fill_style(int x1, int y1, int x2, int y2, style st) {
-    for (int j = y1; j < y2; j++) {
-        for (int i = x1; i < x2; i++) {
+void Term::Window::fill_style(size_t x1, size_t y1,
+                              size_t width, size_t height, style st) {
+    if (st == style::unspecified) st = default_style;
+    for (size_t j = y1; j < y1 + height; j++) {
+        for (size_t i = x1; i < x1 + width; i++) {
             set_style(i, j, st);
         }
     }
@@ -406,17 +469,17 @@ void Term::Window::print_rect(
     fgColor fgcol,
     bgColor bgcol
 )
-// A rectangle will not auto-grow the window, it just disappears
-// outside its borders
+// A rectangle does not auto-grow the window.
+// Only the in-window parts are drawn.
 {
     if (x1 >= w || y1 >= h) return;
     std::u32string border;
     switch (b) {
-    case border_type::no_border : return;
-    case border_type::blank : border = U"      "; break;
-    case border_type::ascii : border = U"|-++++"; break;
-    case border_type::utf1 : border = U"│─┌┐└┘"; break;
-    case border_type::utf2 : border = U"║═╔╗╚╝"; break;
+    case border_type::NO_BORDER : return;
+    case border_type::BLANK : border = U"      "; break;
+    case border_type::ASCII : border = U"|-++++"; break;
+    case border_type::LINE : border = U"│─┌┐└┘"; break;
+    case border_type::DOUBLE_LINE : border = U"║═╔╗╚╝"; break;
     default: throw runtime_error ("undefined border value");
     }
     size_t x2 = x1 + width - 1, y2 = y1 + height - 1;
@@ -471,30 +534,44 @@ void Term::Window::clear_row(size_t y) {
     }
 }
 
-std::string Term::Window::render() {
+std::string Term::Window::render(size_t x0, size_t y0,
+                                 size_t width, size_t height) {
     if (children.size()) return merge_children().render();
     std::string out;
-    if (is_main_window) out = cursor_off() + clear_screen() + move_cursor(1, 1);
+    if (is_main_window()) {
+        out = cursor_off() + clear_screen() + move_cursor(1, 1);
+    }
     fgColor current_fg(fg::reset);
     bgColor current_bg(bg::reset);
     style current_style = style::reset;
-    for (size_t j = 0; j < h; j++) {
-        if (j)
+    const size_t x1 = std::min(w, x1 + width);
+    const size_t y1 = std::min(h, y0 + height);
+    for (size_t j = y0; j < y1; j++) {
+        if (j > y0) {
+            // Resetting background color at the end of each line
+            // is a workaround for the bug in Visual Studio Code
+            // (https://github.com/jupyter-xeus/cpp-terminal/issues/95)
+            if (!current_bg.is_reset()) {
+                out.append(color(bg::reset));
+                current_bg = bg::reset;
+            }
             out.append("\n");
-        for (size_t i = 0; i < w; i++) {
+        }
+        for (size_t i = x0; i < x1; i++) {
             bool update_fg = false;
             bool update_bg = false;
             bool update_style = false;
-            if (current_fg != get_fg(i, j)) {
-                current_fg = get_fg(i, j);
+            Cell current_cell = get_cell(i, j);
+            if (current_fg != current_cell.cell_fg) {
+                current_fg = current_cell.cell_fg;
                 update_fg = true;
             }
-            if (current_bg != get_bg(i, j)) {
-                current_bg = get_bg(i, j);
+            if (current_bg != current_cell.cell_bg) {
+                current_bg = current_cell.cell_bg;
                 update_bg = true;
             }
-            if (current_style != get_style(i, j)) {
-                current_style = get_style(i, j);
+            if (current_style != current_cell.cell_style) {
+                current_style = current_cell.cell_style;
                 update_style = true;
                 if (current_style == style::reset) {
                     // style::reset resets fg and bg colors too, we have to
@@ -507,12 +584,12 @@ std::string Term::Window::render() {
             }
             // Set style first, as style::reset will reset colors too
             if (update_style)
-                out.append(color(get_style(i, j)));
+                out.append(color(current_cell.cell_style));
             if (update_fg)
-                out.append(get_fg(i, j).render());
+                out.append(current_cell.cell_fg.render());
             if (update_bg)
-                out.append(get_bg(i, j).render());
-            Private::codepoint_to_utf8(out, get_char(i, j));
+                out.append(current_cell.cell_bg.render());
+            Private::codepoint_to_utf8(out, current_cell.ch);
         }
     }
     // reset colors and style at the end
@@ -522,14 +599,15 @@ std::string Term::Window::render() {
         out.append(color(bg::reset));
     if (current_style != style::reset)
         out.append(color(style::reset));
-    if (is_main_window) {
+    if (is_main_window()) {
         out.append(move_cursor(cursor_y + 1, cursor_x + 1));
-        if (cursor_visible) out.append(cursor_on());
+        if (cursor_visibility) out.append(cursor_on());
     }
     return out;
-};
+}
 
-Term::Window Term::Window::cutout(size_t x0, size_t y0, size_t width, size_t height) const {
+Term::Window Term::Window::cutout(size_t x0, size_t y0,
+                                  size_t width, size_t height) const {
     Window cropped(width, height);
     for (size_t y = y0; y != y0 + height && y < h; ++y) {
         for (size_t x = x0; x != x0 + width && x < grid[y].size(); ++x) {
@@ -537,7 +615,8 @@ Term::Window Term::Window::cutout(size_t x0, size_t y0, size_t width, size_t hei
         }
     }
     // preserve cursor if within cut-out
-    if (cursor_x < x0 || cursor_x >= x0 + width || cursor_y < y0 || cursor_y >= y0 + height) {
+    if (cursor_x < x0 || cursor_x >= x0 + width || cursor_y < y0
+        || cursor_y >= y0 + height) {
         cropped.set_cursor(0, 0);
     }
     else {
@@ -546,7 +625,8 @@ Term::Window Term::Window::cutout(size_t x0, size_t y0, size_t width, size_t hei
     return cropped;
 }
 
-size_t Term::Window::new_child(size_t o_x, size_t o_y, size_t w_, size_t h_, border_type b) {
+size_t Term::Window::new_child(size_t o_x, size_t o_y, size_t w_,
+                               size_t h_, border_type b) {
     size_t n = children.size();
     ChildWindow cwin(o_x, o_y, w_, h_, b);
     children.push_back(cwin);
@@ -555,7 +635,8 @@ size_t Term::Window::new_child(size_t o_x, size_t o_y, size_t w_, size_t h_, bor
 
 Term::ChildWindow * Term::Window::get_child(size_t i) {
     if (i < children.size()) return &children[i];
-    throw runtime_error("Term::Window::get_child(): child index out of bounds");
+    throw runtime_error("Term::Window::get_child(): "
+                        "child index out of bounds");
 }
 
 size_t Term::Window::get_children_count() const {
@@ -570,7 +651,8 @@ void Term::Window::get_cursor_from_child(const vector<size_t> &v) {
     //TODO! Has bug
     if (v.size() == 0) return;
     if (v[0] >= children.size())
-        throw runtime_error("Term::Window::get_cursor_from_child(): child index out of bounds");
+        throw runtime_error("Term::Window::get_cursor_from_child(): "
+                            "child index out of bounds");
     ChildWindow *ch_ptr = &(children[v[0]]);
     size_t x = 0, y = 0;
     for (size_t i = 0; i != v.size(); ++i) {
@@ -586,7 +668,8 @@ void Term::Window::get_cursor_from_child(const vector<size_t> &v) {
             return;
         }
         if (v[i+1] >= ch_ptr->children.size())
-            throw runtime_error("Term::Window::get_cursor_from_child(): child index out of bounds");
+            throw runtime_error("Term::Window::get_cursor_from_child(): "
+                                "child index out of bounds");
         ch_ptr = &(ch_ptr->children[v[i+1]]);
     }
 }
@@ -613,7 +696,8 @@ Term::border_type Term::ChildWindow::get_border() const {
     return border;
 }
 
-void Term::ChildWindow::set_border(Term::border_type b, fgColor fgcol, bgColor bgcol) {
+void Term::ChildWindow::set_border(Term::border_type b,
+                                   fgColor fgcol, bgColor bgcol) {
     border = b;
     border_fg = fgcol;
     border_bg = bgcol;
@@ -637,17 +721,4 @@ void Term::ChildWindow::hide() {
 
 bool Term::ChildWindow::is_visible() const {
     return visible;
-}
-
-/************************
- * Term::TerminalWindow
- ************************
- */
-
-Term::TerminalWindow::TerminalWindow(int options)
-:   Terminal(options),
-    win(80,30) {
-    int h, w;
-    Private::get_term_size(h, w);
-    win.resize(w, h);
 }

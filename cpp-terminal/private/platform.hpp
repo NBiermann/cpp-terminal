@@ -13,23 +13,18 @@
 #include <stdexcept>
 
 namespace Term::Private {
-extern bool debug;
+extern const bool debug;
 
 // Returns true if the standard input is attached to a terminal
 bool is_stdin_a_tty();
 // Returns true if the standard output is attached to a terminal
 bool is_stdout_a_tty();
 
-//bool win_char_buffered;
-
-bool get_term_size(int& rows, int& cols);
-
-
+bool get_term_size(int& cols, int& rows);
 
 // Returns true if a character is read, otherwise immediately returns false
 // This can't be made inline
 bool read_raw(char32_t* s);
-
 
 /* Note: the code that uses Terminal must be inside try/catch block, otherwise
  * the destructors will not be called when an exception happens and the
@@ -51,14 +46,14 @@ class BaseTerminal {
 #else
     struct termios orig_termios{};
 #endif
-    bool keyboard_enabled{};
 
   protected:
+    static bool keyboard_enabled;
     static bool disable_ctrl_c;
 
   public:
-    explicit BaseTerminal(bool _enable_keyboard = false,
-                          bool _disable_ctrl_c = true);
+    explicit BaseTerminal(bool a_enable_keyboard = false,
+                          bool a_disable_ctrl_c = true);
 
     virtual ~BaseTerminal() noexcept(false);
 };

@@ -11,7 +11,7 @@
 #include <thread>
 
 
-bool Term::Private::debug = false;
+constexpr bool Term::Private::debug = false;
 
 bool Term::Private::is_stdin_a_tty() {
 #ifdef _WIN32
@@ -29,7 +29,7 @@ bool Term::Private::is_stdout_a_tty() {
 #endif
 }
 
-bool Term::Private::get_term_size(int& rows, int& cols) {
+bool Term::Private::get_term_size(int& cols, int& rows) {
 #ifdef _WIN32
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
     if (hout == INVALID_HANDLE_VALUE) {
@@ -59,21 +59,19 @@ bool Term::Private::get_term_size(int& rows, int& cols) {
 
 
 bool Term::Private::read_raw(char32_t* s) {
-    const bool debug = false;
-
+    if (!Term::Private::BaseTerminal::keyboard_enabled) return false;
 #ifdef _WIN32
     if (!_kbhit()) return false;
     int i = _getwch();
-    if (i == EOF) throw std::runtime_error("_getch() failed");
-    if (debug)
-        std::cout << "(raw: " << Private::to_hex((int) i);
+    if (i == EOF) throw std::runtime_error("_getwch() failed");
+    if (debug) std::cout << "(raw: " << Private::to_hex((int) i);
 
     if (i == 3 && !BaseTerminal::disable_ctrl_c) {
-        exit (1);
+        throw std::runtime_error("ctrl-c pressed");
     }
 
-    // A few special key combinations are rendered by Windows as 2
-    // numbers, requiring another _getwch() call. The first number is always null:
+    // A few special key combinations are rendered by Windows as 2 numbers,
+    // requiring another _getwch() call. The first number is always null:
     //    Ctrl - Num_Decimal_Point = 0 0x93
     //    Ctrl - Num_0 = 0, 0x92
     //    Ctrl - Num_1 = 0, 0x75
@@ -86,15 +84,14 @@ bool Term::Private::read_raw(char32_t* s) {
     //    Ctrl - Num_8 = 0, 0x8d
     //    Ctrl - Num_9 = 0, 0x84
     //    Ctrl - Alt - Enter = 0, 0x1c
-    // On Linux, ctrl - Num_x is the same as Num_x
-    // I decided to ignore the above (and possibly more such) Windows combinations
-    // with the only exception of 0 1c (which will be rendered as Alt-Enter, because
-    // Ctrl-Alt-Enter is not defined (apparently, no unique ANSI sequence for this).
+    // On Linux, ctrl - Num_x has the same ANSI sequence as Num_x
+    // I decided to ignore the above (and possibly more such) Windows
+    // combinations, with the only exception of 0 1c which will be interpreted
+    // as Alt-Enter.
     if (i == 0) {
         int j = _getwch();
         if (j == EOF) throw std::runtime_error("_getch() failed");
-        if (debug)
-            std::cout << " " << Private::to_hex((int) j) << ") ";
+        if (debug) std::cout << " " << Private::to_hex((int) j) << ") ";
         *s = (j == 0x1c ? (Key::ALT | Key::ENTER) : Key::UNKNOWN);
         return true;
     }
@@ -109,10 +106,11 @@ bool Term::Private::read_raw(char32_t* s) {
         throw std::runtime_error("read() failed");
     }
     if (nread == 0) return false;
-    //std::cout << "(raw: " << to_hex((int) c[0]) << ") ";
     char32_t u = static_cast<char32_t>(c[0]);
-    if (debug)
-        std::cout << "(raw: " << Private::to_hex((int) u);
+    if (debug) std::cout << "(raw: " << Private::to_hex((int) u);
+    if (u == U'\3' && !BaseTerminal::disable_ctrl_c) {
+        throw std::runtime_error("ctrl-c pressed");
+    }
     int bytes_to_follow;
     if (u < 0x80) {
         *s = u;
@@ -144,14 +142,13 @@ bool Term::Private::read_raw(char32_t* s) {
         return true;
     }
     for (int i = 0; i != bytes_to_follow; ++i) {
-        if (debug)
-            std::cout << "," << Private::to_hex((int) c[i]);
+        if (debug) std::cout << "," << Private::to_hex((int) c[i]);
         if (c[i] >> 6 != 2) {
             *s = Key::UNKNOWN;
             return true;
         }
         u = (u << 6) | (c[i] & 0x3f);
-    }
+    }r
     *s = u;
     if (debug) std::cout << " -> " << Private::to_hex(int(*s)) << ") ";
     return true;
@@ -184,13 +181,13 @@ Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
 #endif
 }
 
-#ifdef _WIN32
-Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_ctrl_c)
-    : keyboard_enabled{_enable_keyboard}
-{
-    disable_ctrl_c = _disable_ctrl_c;
+Term::Private::BaseTerminal::BaseTerminal(bool a_enable_keyboard,
+                                          bool a_disable_ctrl_c) {
+    keyboard_enabled = a_enable_keyboard;
+    disable_ctrl_c = a_disable_ctrl_c;
     // Uncomment this to silently disable raw mode for non-tty
     // if (keyboard_enabled) keyboard_enabled = is_stdin_a_tty();
+#ifdef _WIN32
     out_console = is_stdout_a_tty();
     if (out_console) {
         hout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -223,18 +220,13 @@ Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_c
         DWORD flags = dwOriginalInMode;
         flags |= ENABLE_VIRTUAL_TERMINAL_INPUT;
         flags &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-        flags &= ~ENABLE_PROCESSED_INPUT; // report ctrl-c as keyboard input rather than as a signal
+        // report ctrl-c as keyboard input rather than as a signal:
+        flags &= ~ENABLE_PROCESSED_INPUT;
         if (!SetConsoleMode(hin, flags)) {
             throw std::runtime_error("SetConsoleMode() failed");
         }
     }
 #else
-Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_ctrl_c)
-    : keyboard_enabled{_enable_keyboard}
-{
-    disable_ctrl_c = _disable_ctrl_c;
-    // Uncomment this to silently disable raw mode for non-tty
-    // if (keyboard_enabled) keyboard_enabled = is_stdin_a_tty();
     if (keyboard_enabled) {
         if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
             throw std::runtime_error("tcgetattr() failed");
@@ -248,10 +240,11 @@ Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_c
         // for EOL instead of "\r\n".
         // raw.c_oflag &= ~(OPOST);
         raw.c_cflag |= (CS8);
+
         raw.c_lflag &= ~(ECHO | ICANON | IEXTEN);
-        if (disable_ctrl_c) {
+        //if (disable_ctrl_c) {
             raw.c_lflag &= ~(ISIG);
-        }
+        //}
         raw.c_cc[VMIN] = 0;
         raw.c_cc[VTIME] = 0;
 
@@ -262,4 +255,5 @@ Term::Private::BaseTerminal::BaseTerminal(bool _enable_keyboard, bool _disable_c
 #endif
 }
 
+bool Term::Private::BaseTerminal::keyboard_enabled = false;
 bool Term::Private::BaseTerminal::disable_ctrl_c = false;

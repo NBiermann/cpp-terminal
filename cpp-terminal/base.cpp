@@ -3,6 +3,7 @@
 #include <string>
 #include "private/conversion.hpp"
 #include "private/platform.hpp"
+#include "window.hpp"
 
 
 std::string Term::color(style value) {
@@ -74,7 +75,7 @@ bool Term::is_stdin_a_tty() {
 bool Term::is_stdout_a_tty() {
     return Private::is_stdout_a_tty();
 }
-bool Term::get_term_size(int& rows, int& cols) {
+bool Term::get_term_size(int& cols, int& rows) {
     return Private::get_term_size(rows, cols);
 }
 
@@ -116,30 +117,37 @@ void Term::get_cursor_position(int& rows, int& cols) {
     if (i == std::string::npos)
         throw std::runtime_error(
             "get_cursor_position(): result not found in the response");
-    if (Private::convert_string_to_int(buf.substr(i + 2).c_str(), "%d;%d", &rows, &cols) != 2) {
+    if (Private::convert_string_to_int(buf.substr(i + 2).c_str(),
+                                       "%d;%d", &rows, &cols) != 2) {
         throw std::runtime_error(
             "get_cursor_position(): result could not be parsed");
     }
     return;
 }
 
-Term::Terminal::Terminal(int options)
+Term::Terminal::Terminal(unsigned options)
     : BaseTerminal(bool(options & RAW_INPUT), bool(options & DISABLE_CTRL_C))
-    , clear_screen{bool(options & CLEAR_SCREEN)}
+    , clear_screen(bool(options & CLEAR_SCREEN))
 {
     if (clear_screen)
         save_screen();
 }
 
-Term::Terminal::Terminal(bool _clear_screen)
-    : BaseTerminal(false, true), clear_screen{_clear_screen} {
-    if (clear_screen)
-        save_screen();
-}
+//Term::Terminal::Terminal(bool _clear_screen)
+//    : BaseTerminal(false, true), clear_screen{_clear_screen} {
+//    if (clear_screen)
+//        save_screen();
+//}
 
 Term::Terminal::~Terminal() {
     if (clear_screen) {
-        std::cout << Term::clear_screen() << Term::move_cursor(0, 0) << std::flush;
         restore_screen();
     }
+}
+
+void Term::Terminal::draw_window (Window& win,
+                                  size_t offset_x, size_t offset_y) {
+    int w, h;
+    get_term_size(h, w);
+    std::cout << win.render(offset_x, offset_y, w, h) << std::flush;
 }

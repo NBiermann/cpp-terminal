@@ -7,6 +7,7 @@
 
 using namespace std;
 using namespace Term;
+using Term::Key;
 
 map<u32string, char32_t> Term::sequences = {
     {U"\x1b[A", ARROW_UP},
@@ -99,7 +100,7 @@ map<u32string, char32_t> Term::sequences = {
     {U"\x1b[2;7~", CTRL | ALT | INSERT},
     {U"\x1b[2;8~", SHIFT | CTRL | ALT | INSERT},
 
-    // NUMERIC_5 means the 5 of the numeric block, but
+    // NUMERIC_5 means the '5' on the numeric block, but
     // with "Num" disabled. On Windows, these ANSI sequences
     // are not triggered, so this is Linux-only!
     {U"\x1b[E", NUMERIC_5}, //
@@ -236,7 +237,7 @@ char32_t Term::read_key() {
 }
 
 char32_t Term::read_key0() {
-    u32string seq = read_sequence0();
+    u32string seq = Term::Private::read_sequence0();
     if (!seq.size()) return 0;
     if (seq.size() == 1) {
         switch (seq[0]) {
@@ -260,7 +261,7 @@ char32_t Term::read_key0() {
 }
 
 
-u32string Term::read_sequence(){
+u32string Term::Private::read_sequence(){
     u32string seq = read_sequence0();
     while (seq.empty()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -269,7 +270,7 @@ u32string Term::read_sequence(){
     return seq;
 }
 
-u32string Term::read_sequence0() {
+u32string Term::Private::read_sequence0() {
     u32string seq;
     char32_t c;
     if (!Private::read_raw(&c))
