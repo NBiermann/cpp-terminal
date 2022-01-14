@@ -51,7 +51,8 @@ std::string Term::clear_screen_buffer() {
 }
 
 std::string Term::move_cursor(size_t col, size_t row) {
-    return "\x1b[" + std::to_string(row) + ';' + std::to_string(col) + 'H';
+    return "\x1b[" + std::to_string(row + 1) + ';' + 
+        std::to_string(col + 1) + 'H';
 }
 
 std::string Term::move_cursor_right(int col) {
@@ -60,10 +61,6 @@ std::string Term::move_cursor_right(int col) {
 
 std::string Term::move_cursor_down(int row) {
     return "\x1b[" + std::to_string(row) + 'B';
-}
-
-std::string Term::cursor_position_report() {
-    return "\x1b[6n";
 }
 
 std::string Term::erase_to_eol() {
@@ -96,7 +93,7 @@ void Term::save_screen() {
 void Term::get_cursor_position(int& rows, int& cols) {
     std::string buf;
     char32_t c;
-    write(cursor_position_report());
+    write("\x1b[6n"); // cursor position report
     for (unsigned int i = 0; i < 64; i++) {
         while (!Private::read_raw(&c))
             ;
@@ -121,6 +118,8 @@ void Term::get_cursor_position(int& rows, int& cols) {
         throw std::runtime_error(
             "get_cursor_position(): result could not be parsed");
     }
+    --cols;
+    --rows;
     return;
 }
 
@@ -159,10 +158,10 @@ void Term::Terminal::draw_window (Window& win,
     size_t w, h;
     get_term_size(w, h);
     std::cout << Term::cursor_off();//<< Term::clear_screen();
-    std::cout << Term::move_cursor(1, 1);
+    std::cout << Term::move_cursor(0, 0);
     std::cout << win.render(offset_x, offset_y, w, h) << std::flush;
     if (!win.is_cursor_visible()) return;
-    std::cout << Term::move_cursor(win.get_cursor_x() + 1, win.get_cursor_y() + 1);
+    std::cout << Term::move_cursor(win.get_cursor_x(), win.get_cursor_y());
     std::cout << cursor_on() << std::flush;
 
 }

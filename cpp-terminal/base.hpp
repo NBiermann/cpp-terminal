@@ -103,8 +103,6 @@ std::string move_cursor_right(int);
 // stops at the bottom margin.
 std::string move_cursor_down(int);
 
-std::string cursor_position_report();
-
 std::string erase_to_eol();
 
 bool is_stdin_a_tty();

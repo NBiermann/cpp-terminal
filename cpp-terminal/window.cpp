@@ -114,6 +114,12 @@ Term::Window::Window(size_t w_, size_t h_)
     , grid(h_)
 {}
 
+Term::Window::~Window() {
+    for (ChildWindow* cwin : children) {
+        delete cwin;
+    }
+}
+
 void Term::Window::assure_pos(size_t x, size_t y){
     if (y >= h) {
         if (fixed_height) throw std::runtime_error("y out of bounds");
@@ -134,53 +140,53 @@ Term::Window Term::Window::merge_children() const {
     res.grid = grid;
     res.cursor_x = cursor_x;
     res.cursor_y = cursor_y;
-    for (const ChildWindow &child : children) {
-        if (!child.is_visible()) continue;
+    for (const ChildWindow *cwin : children) {
+        if (!cwin->is_visible()) continue;
         // in case there are nested children:
         // TODO is there a more elegant way? With less copying?
-        Window mc = child.merge_children();
-        size_t b = (child.border == border_type::NO_BORDER ? 0 : 1);
-        if (child.offset_x < b || child.offset_x + child.w + b > w ||
-            child.offset_y < b || child.offset_y + child.h + b > h) {
-            throw("merge_children(): child is (partially) out of window");
-        }
+        Window mc = cwin->merge_children();
+        size_t b = (cwin->border == border_type::NO_BORDER ? 0 : 1);
         // merge grid:
-        for (size_t y = 0; y < child.h; ++y) {
-            size_t pos_y = y + child.offset_y;
+        for (size_t y = 0; y < cwin->h; ++y) {
+            size_t pos_y = y + cwin->offset_y;
             if (pos_y >= h) break;
-            for (size_t x = 0; x < child.w; ++x) {
-                size_t pos_x = x + child.offset_x;
+            for (size_t x = 0; x < cwin->w; ++x) {
+                size_t pos_x = x + cwin->offset_x;
                 if (pos_x >= w) break;
                 res.set_cell(pos_x, pos_y, mc.get_cell(x, y));
             }
         }
         // draw border:
-        if (child.border == border_type::NO_BORDER) {
+        if (cwin->border == border_type::NO_BORDER) {
             continue;
         }  
         // 
         res.print_rect(  
-            // TODO title gleich berücksichtigen?!
-            child.offset_x ? child.offset_x - 1 : 0,
-            child.offset_y ? child.offset_y - 1 : 0,
-            child.offset_x ? child.w + 2 : child.w + 1,
-            child.offset_y ? child.h + 2 : child.h + 1,
-            child.border,
-            child.border_fg,
-            child.border_bg
+            // TODO include title right away?!
+            cwin->offset_x ? cwin->offset_x - 1 : 0,
+            cwin->offset_y ? cwin->offset_y - 1 : 0,
+            cwin->offset_x ? cwin->w + 2 : cwin->w + 1,
+            cwin->offset_y ? cwin->h + 2 : cwin->h + 1,
+            cwin->border,
+            cwin->border_fg,
+            cwin->border_bg
         );
-        // title
-        if (!child.title.size()) {
+        // print title
+        if (!cwin->title.size()) {
             continue;
-        }         
-        u32string title_cp = child.title.substr(0, child.w);
-        if (title_cp.size() < child.w - 2) {
+        }
+        // title out of window?
+        if (cwin->offset_y > h) {
+            continue;
+        }
+        u32string title_cp = cwin->title.substr(0, cwin->w);
+        if (title_cp.size() <= cwin->w - 2) {
             title_cp = U" " + title_cp + U" ";
         }           
-        size_t x0 = child.offset_x + (child.w - title_cp.size()) / 2;
-        for (size_t i = 0; i != title_cp.size(); ++i) {
+        size_t x0 = cwin->offset_x + (cwin->w - title_cp.size()) / 2;
+        for (size_t i = 0; i != title_cp.size() && x0 + i < w; ++i) {
             // color has already been set to border_fg/border_bg
-            res.set_char(x0 + i, child.offset_y - 1, title_cp[i]);
+            res.set_char(x0 + i, cwin->offset_y - 1, title_cp[i]);
         }
     }
     return res;
@@ -295,7 +301,9 @@ void Term::Window::trim_h(size_t minimal_height) {
     }
     // make sure the cursor remains in the window
     y = max(y, cursor_y + 1);
-    set_h(y);}
+    set_h(y);
+    // TODO take non-hidden sub-windows into account
+}
 
 void Term::Window::resize(size_t new_w, size_t new_h) {
     set_w(new_w);
@@ -452,7 +460,7 @@ size_t Term::Window::print_str(const std::u32string& s,
         }
 
         // New
-        // TODO: tab
+        // TODO: tab?
         if (ch >= U' ' && ch <= UTF8_MAX) {
             if ((x >= w && fixed_width) || (y >= h && fixed_height)) {
                 // out of the window
@@ -464,7 +472,7 @@ size_t Term::Window::print_str(const std::u32string& s,
             set_style(x, y, a_style);
             ++x;
             if (x < w) continue;
-            // Right margin exceeded. We ignore that if next character in
+            // Right margin exceeded. Ignore that if next character in
             // the string is '\n' anyway:
             if (i + 1 != s.size() && s[i + 1] == ENTER) continue;
             // Unless fixed, adjust the width of the window
@@ -613,9 +621,10 @@ void Term::Window::clear_row(size_t y) {
 
 string Term::Window::render(size_t x0, size_t y0,
                                  size_t width, size_t height) {
+    // TODO move this into Terminal::draw_window()?
     if (children.size()) return merge_children().render(x0, y0, width, height);
 
-    string out;// = cursor_off() + clear_screen() + move_cursor(1, 1);
+    string out;// = cursor_off() + clear_screen() + move_cursor(0, 0);
     fgColor current_fg(fg::reset);
     bgColor current_bg(bg::reset);
     style current_style = style::reset;
@@ -676,7 +685,7 @@ string Term::Window::render(size_t x0, size_t y0,
         out.append(color(bg::reset));
     if (current_style != style::reset)
     out.append(color(style::reset));
-    //out.append(move_cursor(cursor_x + 1, cursor_y + 1));
+    //out.append(move_cursor(cursor_x, cursor_y));
     //if (cursor_visibility) out.append(cursor_on());
     //else out.append(cursor_off()); //necessary?
     return out;
@@ -703,100 +712,131 @@ Term::Window Term::Window::cutout(size_t x0, size_t y0,
 
 Term::ChildWindow* Term::Window::new_child(size_t o_x, size_t o_y,
                                     size_t w_, size_t h_, border_type b) {
-    size_t n = children.size();
-    ChildWindow cwin(this, n, o_x, o_y, w_, h_, b);
+    ChildWindow* cwin = new ChildWindow(this, o_x, o_y, w_, h_, b);
     children.push_back(cwin);
-    return &(children[n]);
+    return cwin;
 }
 
 Term::ChildWindow* Term::Window::get_child_ptr(size_t i) {
-    if (i < children.size()) return &(children[i]);
+    if (i < children.size()) return children[i];
     throw runtime_error("Term::Window::get_child(): "
                         "child index out of bounds");
+}
+
+size_t Term::Window::get_child_index(ChildWindow *cwin) const {
+    for (size_t i = 0; i != children.size(); ++i) {
+        if (children[i] == cwin)
+            return i;
+    }
+    throw runtime_error("get_child_index(): argument is not a child of *this");
 }
 
 size_t Term::Window::get_children_count() const {
     return children.size();
 }
 
-void Term::Window::take_cursor_from_child(size_t i) {
-    if (i >= children.size())
-        throw runtime_error("Term::Window::take_cursor_from_child(): "
-                            "child index out of bounds");
-    if (!(children[i].visible && children[i].cursor_visibility)) {
+void Term::Window::child_to_foreground(ChildWindow* cwin) {
+    size_t i = get_child_index(cwin);
+    size_t j = children.size() - 1;
+    if (i == j)
+        return;
+    ChildWindow* temp = children[j];
+    children[j] = children[i];
+    children[i] = temp;
+}
+
+
+void Term::Window::child_to_background(ChildWindow* cwin) {
+    size_t i = get_child_index(cwin);
+    if (i == 0)
+        return;
+    ChildWindow* temp = children[0];
+    children[0] = children[i];
+    children[i] = temp;
+}
+
+
+void Term::Window::take_cursor_from_child(ChildWindow* cwin) {
+    if (cwin == this)
+        return;
+    if (cwin->is_base_window())
+        throw runtime_error(
+            "take_cursor_from_child(): argument is not a child");
+    if (!cwin->is_visible() || !cwin->cursor_visibility) {
         cursor_visibility = false;
         return;
     }
-    size_t x = children[i].offset_x + children[i].cursor_x;
-    size_t y = children[i].offset_y + children[i].cursor_y;
-    if (x >= w || y >= h) {
-        cursor_visibility = false;
-        return;
-    }
-    cursor_x = x;
-    cursor_y = y;
-    cursor_visibility = true;
-    // is cursor obscured by another window?
-    for (size_t j = i + 1; j != children.size(); ++j) {
-        if (!children[j].visible) {
+    Window* pwin = cwin->get_parent_ptr();
+    size_t x = cwin->cursor_x;
+    size_t y = cwin->cursor_y;
+    // Cursor obscured by child's own child?
+    for (ChildWindow* cwin2 : cwin->children) {
+        if (!cwin2->visible) {
             continue;
         }
-        size_t b = (children[j].border == border_type::NO_BORDER ? 0 : 1);
-        if (x + b >= children[j].offset_x && 
-            x < children[j].offset_x + children[j].w + b &&
-            y + b >= children[j].offset_y &&
-            y < children[j].offset_y + children[j].h + b) {
+        size_t b = (cwin2->border == border_type::NO_BORDER ? 0 : 1);
+        if (x + b >= cwin2->offset_x && x < cwin2->offset_x + cwin2->w + b &&
+            y + b >= cwin2->offset_y && y < cwin2->offset_y + cwin2->h + b) {
             cursor_visibility = false;
-            break;
+            return;
         }
     }
+    x += cwin->offset_x;
+    y += cwin->offset_y;
+    if (x >= pwin->w || y >= pwin->h) {
+        cursor_visibility = false;
+        return;
+    }
+    // pass cursor on to base window
+    while (!pwin->is_base_window()) {
+        cwin = dynamic_cast<ChildWindow*>(pwin);
+        pwin = cwin->get_parent_ptr();
+        x += cwin->offset_x;
+        y += cwin->offset_y;
+        if (!cwin->is_visible() || x >= pwin->w || y >= pwin->h) {
+            cursor_visibility = false;
+            return;
+        }
+    }
+    if (pwin != this)
+        throw runtime_error(
+            "take_cursor_from_child(): argument does not belong to *this"); 
+    cursor_x = x;
+    cursor_y = y;
+    // is cursor obscured by another window?
+    bool is_more_to_the_fore = false;
+    for (ChildWindow *cwin2 : children) {
+        if (cwin2 == cwin) {
+            is_more_to_the_fore = true;
+            continue;
+        }
+        if (!is_more_to_the_fore || !cwin2->visible) {
+            continue;
+        }
+        size_t b = (cwin2->border == border_type::NO_BORDER ? 0 : 1);
+        if (x + b >= cwin2->offset_x &&
+            x < cwin2->offset_x + cwin2->w + b &&
+            y + b >= cwin2->offset_y &&
+            y < cwin2->offset_y + cwin2->h + b) {
+            cursor_visibility = false;
+            return;
+        }
+    }
+    cursor_visibility = true;
     return;
 }
 
-void Term::Window::take_cursor_from_child(const vector<size_t> &v) {
-    //TODO! Has bug
-    if (!v.size()) return;
-    if (v[0] >= children.size())
-        throw runtime_error("Term::Window::take_cursor_from_child(): "
-                            "child index out of bounds");
-    cursor_visibility = true;
-    ChildWindow *ch_ptr = get_child_ptr(v[0]);
-    size_t x = 0, y = 0;
-    for (size_t i = 0; i != v.size(); ++i) {
-        if (!ch_ptr->visible) {
-            cursor_visibility = false;
-            return;
-        }
-        x += ch_ptr->offset_x;
-        y += ch_ptr->offset_y;
-        if (i == v.size() - 1) {
-            x += ch_ptr->cursor_x;
-            y += ch_ptr->cursor_y;
-            if (x >= w || y >= h) {
-                cursor_visibility = false;
-                return;
-            }
-            cursor_x = x;
-            cursor_y = y;
-            return;
-        }
-        if (v[i+1] >= ch_ptr->children.size())
-            throw runtime_error("Term::Window::take_cursor_from_child(): "
-                                "child index out of bounds");
-        ch_ptr = ch_ptr->get_child_ptr(v[i+1]);
-    }
-}
+
 
 /*********************
  * Term::ChildWindow
  *********************
  */
 
-Term::ChildWindow::ChildWindow(Window* ptr, size_t i,
+Term::ChildWindow::ChildWindow(Window* ptr,
                                size_t off_x, size_t off_y,
                                size_t w_, size_t h_, border_type b)
     : parent_ptr(ptr)
-    , index(i)
     , Window(w_, h_)
     , offset_x(off_x)
     , offset_y(off_y)
@@ -806,10 +846,6 @@ Term::ChildWindow::ChildWindow(Window* ptr, size_t i,
 
 Term::Window* Term::ChildWindow::get_parent_ptr() const {
     return parent_ptr;
-}
-
-size_t Term::ChildWindow::get_index() const {
-    return index;
 }
 
 size_t Term::ChildWindow::get_offset_x() const {
@@ -876,6 +912,10 @@ void Term::ChildWindow::set_border_bg(bgColor bgcol) {
     border_bg = bgcol;
 }
 
+bool Term::ChildWindow::is_visible() const {
+    return visible;
+}
+
 void Term::ChildWindow::show() {
     visible = true;
 }
@@ -884,6 +924,5 @@ void Term::ChildWindow::hide() {
     visible = false;
 }
 
-bool Term::ChildWindow::is_visible() const {
-    return visible;
-}
+
+

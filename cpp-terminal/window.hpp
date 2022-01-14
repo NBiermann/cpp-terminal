@@ -120,7 +120,7 @@ class Window {
     bgColor default_bg;
     style default_style{};
     std::vector<std::vector<Cell>> grid; // the cells (grid[0] is top row)
-    std::vector<ChildWindow> children;
+    std::vector<ChildWindow*> children;
 
     void assure_pos(size_t x, size_t y);
     Window merge_children() const;
@@ -128,7 +128,7 @@ class Window {
    public :
     Window(size_t w_ = 0, size_t h_ = 0);
 
-    virtual ~Window() = default;
+    virtual ~Window();
 
     virtual bool is_base_window() {return true;}
 
@@ -218,16 +218,17 @@ class Window {
     ChildWindow* new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
                            border_type b = border_type::LINE);
     ChildWindow* get_child_ptr(size_t);
+    size_t get_child_index(ChildWindow*) const;
     size_t get_children_count() const;
-    void take_cursor_from_child(size_t);
-    void take_cursor_from_child(const std::vector<size_t>&);
+    void child_to_foreground(ChildWindow*);
+    void child_to_background(ChildWindow*);
+    void take_cursor_from_child(ChildWindow*);
 };
 
 // Represents a sub-window. Child windows may be nested.
 class ChildWindow : public Window {
     friend Window;
     Window *parent_ptr;
-    size_t index;
     size_t offset_x{}, offset_y{};
     std::u32string title;
     border_type border;
@@ -235,13 +236,12 @@ class ChildWindow : public Window {
     bgColor border_bg;
     bool visible{};
 
-    ChildWindow(Window* ptr, size_t i, size_t o_x, size_t o_y,
+    ChildWindow(Window* ptr, size_t o_x, size_t o_y,
                 size_t w_, size_t h_, border_type b = border_type::LINE);
 
 public :
     bool is_base_window() override {return false;}
     Window* get_parent_ptr() const;
-    size_t get_index() const;
     size_t get_offset_x() const;
     size_t get_offset_y() const;
     std::pair<size_t, size_t> move_to(size_t, size_t);
@@ -257,6 +257,8 @@ public :
     bool is_visible() const;
     void show();
     void hide();
+    void to_foreground();
+    void to_background();
 };
 
 

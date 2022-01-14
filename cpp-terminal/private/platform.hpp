@@ -31,6 +31,7 @@ bool read_raw(char32_t* s);
 
 void clean_up();
 
+// handler for CTRL-C event
 #ifdef _WIN32
 BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
 #else
