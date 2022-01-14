@@ -11,7 +11,7 @@
 #include <thread>
 
 
-constexpr bool Term::Private::debug = false;
+const bool Term::Private::debug = false;
 
 bool Term::Private::is_stdin_a_tty() {
 #ifdef _WIN32
@@ -29,7 +29,7 @@ bool Term::Private::is_stdout_a_tty() {
 #endif
 }
 
-bool Term::Private::get_term_size(int& cols, int& rows) {
+bool Term::Private::get_term_size(size_t& cols, size_t& rows) {
 #ifdef _WIN32
     HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
     if (hout == INVALID_HANDLE_VALUE) {
@@ -37,8 +37,8 @@ bool Term::Private::get_term_size(int& cols, int& rows) {
     }
     CONSOLE_SCREEN_BUFFER_INFO inf;
     if (GetConsoleScreenBufferInfo(hout, &inf)) {
-        cols = inf.srWindow.Right - inf.srWindow.Left + 1;
-        rows = inf.srWindow.Bottom - inf.srWindow.Top + 1;
+        cols = static_cast<size_t>(inf.srWindow.Right - inf.srWindow.Left) + 1;
+        rows = static_cast<size_t>(inf.srWindow.Bottom - inf.srWindow.Top) + 1;
         return true;
     } else {
         // This happens when we are not connected to a terminal
@@ -50,8 +50,8 @@ bool Term::Private::get_term_size(int& cols, int& rows) {
         // This happens when we are not connected to a terminal
         return false;
     } else {
-        cols = ws.ws_col;
-        rows = ws.ws_row;
+        cols = static_cast<size_t>(ws.ws_col);
+        rows = static_cast<size_t>(ws.ws_row);
         return true;
     }
 #endif
@@ -59,19 +59,20 @@ bool Term::Private::get_term_size(int& cols, int& rows) {
 
 
 bool Term::Private::read_raw(char32_t* s) {
-    if (!Term::Private::BaseTerminal::keyboard_enabled) return false;
+    if (!Term::Private::BaseTerminal::is_instantiated ||
+        !Term::Private::BaseTerminal::raw_input) {
+        return false;
+    }
 #ifdef _WIN32
     if (!_kbhit()) return false;
     int i = _getwch();
     if (i == EOF) throw std::runtime_error("_getwch() failed");
     if (debug) std::cout << "(raw: " << Private::to_hex((int) i);
 
-    if (i == 3 && !BaseTerminal::disable_ctrl_c) {
-        throw std::runtime_error("ctrl-c pressed");
-    }
-
-    // A few special key combinations are rendered by Windows as 2 numbers,
-    // requiring another _getwch() call. The first number is always null:
+    // Even in "virtual terminal input" mode, _getwch() appears to pass on
+    // a few key combinations in Windows-specific manner rather than
+    // as ANSI escape sequences. These are apparently 2 bytes, the first 
+    // one being zero. Another _getwch() call is required.
     //    Ctrl - Num_Decimal_Point = 0 0x93
     //    Ctrl - Num_0 = 0, 0x92
     //    Ctrl - Num_1 = 0, 0x75
@@ -84,7 +85,7 @@ bool Term::Private::read_raw(char32_t* s) {
     //    Ctrl - Num_8 = 0, 0x8d
     //    Ctrl - Num_9 = 0, 0x84
     //    Ctrl - Alt - Enter = 0, 0x1c
-    // On Linux, ctrl - Num_x has the same ANSI sequence as Num_x
+    // On Linux, ctrl - Num_x yields the same ANSI sequence as Num_x.
     // I decided to ignore the above (and possibly more such) Windows
     // combinations, with the only exception of 0 1c which will be interpreted
     // as Alt-Enter.
@@ -108,9 +109,6 @@ bool Term::Private::read_raw(char32_t* s) {
     if (nread == 0) return false;
     char32_t u = static_cast<char32_t>(c[0]);
     if (debug) std::cout << "(raw: " << Private::to_hex((int) u);
-    if (u == U'\3' && !BaseTerminal::disable_ctrl_c) {
-        throw std::runtime_error("ctrl-c pressed");
-    }
     int bytes_to_follow;
     if (u < 0x80) {
         *s = u;
@@ -148,49 +146,86 @@ bool Term::Private::read_raw(char32_t* s) {
             return true;
         }
         u = (u << 6) | (c[i] & 0x3f);
-    }r
+    }
     *s = u;
     if (debug) std::cout << " -> " << Private::to_hex(int(*s)) << ") ";
     return true;
 #endif
 }
 
-
-
-Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
+void Term::Private::clean_up() {
+    typedef BaseTerminal BT;
+    if (!BT::is_instantiated) return;
+    if (BT::clear_screen) {
+        // restore screen
+        std::cout << "\x1b[?1049l" << std::flush;
+        // restore old cursor position
+        std::cout << "\x1b"
+                     "8"
+                  << std::flush;
+    }
 #ifdef _WIN32
-    if (out_console) {
-        SetConsoleOutputCP(out_code_page);
-        if (!SetConsoleMode(hout, dwOriginalOutMode)) {
-            throw std::runtime_error("SetConsoleMode() failed in destructor");
+    if (BT::out_console) {
+        SetConsoleOutputCP(BT::out_code_page);
+        if (!SetConsoleMode(BT::hout, BT::dwOriginalOutMode)) {
+            throw std::runtime_error("SetConsoleMode() failed in clean-up");
         }
     }
-
-    if (keyboard_enabled) {
-        SetConsoleCP(in_code_page);
-        if (!SetConsoleMode(hin, dwOriginalInMode)) {
-            throw std::runtime_error("SetConsoleMode() failed in destructor");
+    if (BT::raw_input) {
+        SetConsoleCP(BT::in_code_page);
+        if (!SetConsoleMode(BT::hin, BT::dwOriginalInMode)) {
+            throw std::runtime_error("SetConsoleMode() failed in clean-up");
         }
     }
 #else
-    if (keyboard_enabled) {
-        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
-            throw std::runtime_error("tcsetattr() failed in destructor");
+    if (BT::raw_input) {
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &BT::orig_termios) == -1) {
+            throw std::runtime_error("tcsetattr() failed in clean-up");
         }
     }
 #endif
 }
 
-Term::Private::BaseTerminal::BaseTerminal(bool a_enable_keyboard,
+
+#ifdef _WIN32
+// While Windows does support <csignal>, this way seems to be more idiomatic
+BOOL WINAPI Term::Private::CtrlHandler(DWORD fdwCtrlType) {
+    switch (fdwCtrlType) {
+            // Handle the CTRL-C signal.
+        case CTRL_C_EVENT:
+            Term::Private::clean_up();
+            // pass the signal on
+            return FALSE;
+        default:
+            return FALSE;
+    }
+}
+#else
+void Term::Private::SignalHandler(int signum) {
+    Term::Private::clean_up();
+    exit(signum);
+}
+#endif
+
+Term::Private::BaseTerminal::BaseTerminal(bool a_clear_screen,
+                                          bool a_raw_input,
                                           bool a_disable_ctrl_c) {
-    keyboard_enabled = a_enable_keyboard;
+    if (is_instantiated) {
+        throw std::runtime_error("Only one instance of BaseTerminal allowed");
+    }
+    is_instantiated = true;
+    clear_screen = a_clear_screen;
+    raw_input = a_raw_input;
     disable_ctrl_c = a_disable_ctrl_c;
     // Uncomment this to silently disable raw mode for non-tty
-    // if (keyboard_enabled) keyboard_enabled = is_stdin_a_tty();
+    // raw_input &= is_stdin_a_tty();
 #ifdef _WIN32
     out_console = is_stdout_a_tty();
     if (out_console) {
-        hout = GetStdHandle(STD_OUTPUT_HANDLE);
+        HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
+        // Uncomment to hide vertical scroll bar:
+        // ShowScrollBar(GetConsoleWindow(), SB_VERT, 0);
+
         out_code_page = GetConsoleOutputCP();
         SetConsoleOutputCP(65001);
         if (hout == INVALID_HANDLE_VALUE) {
@@ -207,27 +242,35 @@ Term::Private::BaseTerminal::BaseTerminal(bool a_enable_keyboard,
         }
     }
 
-    if (keyboard_enabled) {
+    if (raw_input) {
         hin = GetStdHandle(STD_INPUT_HANDLE);
-        in_code_page = GetConsoleCP();
-//        SetConsoleCP(65001);
         if (hin == INVALID_HANDLE_VALUE) {
             throw std::runtime_error("GetStdHandle(STD_INPUT_HANDLE) failed");
         }
+        in_code_page = GetConsoleCP();
+        //        SetConsoleCP(65001);
         if (!GetConsoleMode(hin, &dwOriginalInMode)) {
             throw std::runtime_error("GetConsoleMode() failed");
         }
         DWORD flags = dwOriginalInMode;
         flags |= ENABLE_VIRTUAL_TERMINAL_INPUT;
         flags &= ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
-        // report ctrl-c as keyboard input rather than as a signal:
-        flags &= ~ENABLE_PROCESSED_INPUT;
+        if (disable_ctrl_c) {
+            // report ctrl-c as keyboard input rather than as a signal:
+            flags &= ~ENABLE_PROCESSED_INPUT;
+        }
+        else {
+            //std::signal(SIGINT, Term::Private::SignalHandler);
+            if (!SetConsoleCtrlHandler(CtrlHandler, TRUE)) {
+                throw std::runtime_error("Could not set control handler");
+            }
+        }
         if (!SetConsoleMode(hin, flags)) {
             throw std::runtime_error("SetConsoleMode() failed");
         }
     }
 #else
-    if (keyboard_enabled) {
+    if (raw_input) {
         if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
             throw std::runtime_error("tcgetattr() failed");
         }
@@ -242,9 +285,12 @@ Term::Private::BaseTerminal::BaseTerminal(bool a_enable_keyboard,
         raw.c_cflag |= (CS8);
 
         raw.c_lflag &= ~(ECHO | ICANON | IEXTEN);
-        //if (disable_ctrl_c) {
+        if (disable_ctrl_c) {
             raw.c_lflag &= ~(ISIG);
-        //}
+        }
+        else {
+            std::signal(SIGINT, Term::Private::SignalHandler);
+        }
         raw.c_cc[VMIN] = 0;
         raw.c_cc[VTIME] = 0;
 
@@ -253,7 +299,33 @@ Term::Private::BaseTerminal::BaseTerminal(bool a_enable_keyboard,
         }
     }
 #endif
+    if (clear_screen) {
+        // save current cursor position
+        std::cout << "\x1b"
+                     "7"
+                  << std::flush;
+        // save screen
+        std::cout << "\033[?1049h" << std::flush;
+    }
 }
 
-bool Term::Private::BaseTerminal::keyboard_enabled = false;
+Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
+    Term::Private::clean_up();
+    is_instantiated = false;
+}
+
+bool Term::Private::BaseTerminal::is_instantiated = false;
+bool Term::Private::BaseTerminal::clear_screen = false;
+bool Term::Private::BaseTerminal::raw_input = false;
 bool Term::Private::BaseTerminal::disable_ctrl_c = false;
+#ifdef _WIN32
+HANDLE Term::Private::BaseTerminal::hout{};
+DWORD Term::Private::BaseTerminal::dwOriginalOutMode{};
+bool Term::Private::BaseTerminal::out_console{};
+UINT Term::Private::BaseTerminal::out_code_page{};
+HANDLE Term::Private::BaseTerminal::hin{};
+DWORD Term::Private::BaseTerminal::dwOriginalInMode{};
+UINT Term::Private::BaseTerminal::in_code_page{};
+#else
+struct termios Term::Private::BaseTerminal::orig_termios{};
+#endif

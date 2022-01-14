@@ -27,8 +27,8 @@ protected :
 		fg fg_val;
 		bg bg_val;
 	};
-	Color(const Term::fg);
-	Color(const Term::bg);
+	Color(const fg);
+	Color(const bg);
 	Color(const uint8_t, const uint8_t, const uint8_t);
 public :
     bool is_rgb() const;
@@ -126,32 +126,22 @@ class Window {
     Window merge_children() const;
 
    public :
-    Window(size_t w_ = 0, size_t h_ = 0)
-        : w{w_},
-          h{h_},
-          fixed_width(true),
-          fixed_height(true),
-          cursor_visibility(true),
-          cursor_x{0},
-          cursor_y{0},
-          tabsize(0),
+    Window(size_t w_ = 0, size_t h_ = 0);
 
-          default_fg(fgColor(fg::reset)),
-          default_bg(bgColor(bg::reset)),
-          default_style(style::reset),
-          grid(h_)
-    {}
     virtual ~Window() = default;
 
-    virtual bool is_main_window() {return true;}
+    virtual bool is_base_window() {return true;}
 
     size_t get_w() const;
     void set_w(size_t);
+    void trim_w(size_t);
 
     size_t get_h() const;
     void set_h(size_t);
+    void trim_h(size_t);
 
     void resize(size_t, size_t);
+    void trim(size_t, size_t);
 
     bool is_fixed_width() const;
     void set_fixed_width (bool);
@@ -189,7 +179,7 @@ class Window {
 
     std::vector<std::vector<Cell>> get_grid() const;
     void set_grid(const std::vector<std::vector<Cell>> &);
-    void copy_grid_from_window(const Window&);
+    void copy_grid_from(const Window&);
     void clear_grid();
 
 
@@ -225,44 +215,48 @@ class Window {
     std::string render(size_t = 0, size_t = 0,
                        size_t = std::string::npos, size_t = std::string::npos);
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
-    size_t new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
-                     border_type b = border_type::LINE);
-    ChildWindow * get_child(size_t);
+    ChildWindow* new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
+                           border_type b = border_type::LINE);
+    ChildWindow* get_child_ptr(size_t);
     size_t get_children_count() const;
-    void get_cursor_from_child(size_t);
-    void get_cursor_from_child(const std::vector<size_t>&);
+    void take_cursor_from_child(size_t);
+    void take_cursor_from_child(const std::vector<size_t>&);
 };
 
 // Represents a sub-window. Child windows may be nested.
 class ChildWindow : public Window {
     friend Window;
+    Window *parent_ptr;
+    size_t index;
     size_t offset_x{}, offset_y{};
+    std::u32string title;
     border_type border;
     fgColor border_fg;
     bgColor border_bg;
     bool visible{};
 
-    ChildWindow(size_t o_x, size_t o_y, size_t w_, size_t h_,
-                border_type b = border_type::LINE)
-        : Window(w_, h_),
-          offset_x(o_x),
-          offset_y(o_y),
-          border(b),
-          visible(false)
-{}
+    ChildWindow(Window* ptr, size_t i, size_t o_x, size_t o_y,
+                size_t w_, size_t h_, border_type b = border_type::LINE);
 
 public :
-    bool is_main_window() override {return false;}
+    bool is_base_window() override {return false;}
+    Window* get_parent_ptr() const;
+    size_t get_index() const;
     size_t get_offset_x() const;
     size_t get_offset_y() const;
-    void move_to(size_t, size_t);
+    std::pair<size_t, size_t> move_to(size_t, size_t);
+    std::u32string get_title() const;
+    void set_title(const std::string&);
+    void set_title(const std::u32string&);
     border_type get_border() const;
     void set_border(border_type, fgColor = fg::reset, bgColor = bg::reset);
+    fgColor get_border_fg() const;
     void set_border_fg(fgColor);
+    bgColor get_border_bg() const;
     void set_border_bg(bgColor);
+    bool is_visible() const;
     void show();
     void hide();
-    bool is_visible() const;
 };
 
 

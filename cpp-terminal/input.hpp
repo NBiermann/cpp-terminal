@@ -42,8 +42,6 @@ enum Key : char32_t {
     TAB = 9,       // same as CTRL_I
     ESC = 0x1b,
 
-    UTF8_MAX = 0x0010ffff,
-
     SHIFT =    0x1000000u, // flag
     ALT =      0x2000000u, // flag
     CTRL =     0x4000000u, // flag

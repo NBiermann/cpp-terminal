@@ -50,7 +50,7 @@ std::string Term::clear_screen_buffer() {
     return "\033[3J";
 }
 
-std::string Term::move_cursor(size_t row, size_t col) {
+std::string Term::move_cursor(size_t col, size_t row) {
     return "\x1b[" + std::to_string(row) + ';' + std::to_string(col) + 'H';
 }
 
@@ -75,8 +75,8 @@ bool Term::is_stdin_a_tty() {
 bool Term::is_stdout_a_tty() {
     return Private::is_stdout_a_tty();
 }
-bool Term::get_term_size(int& cols, int& rows) {
-    return Private::get_term_size(rows, cols);
+bool Term::get_term_size(size_t& cols, size_t& rows) {
+    return Private::get_term_size(cols, rows);
 }
 
 void Term::restore_screen() {
@@ -84,7 +84,6 @@ void Term::restore_screen() {
     write(
         "\033"
         "8");  // restore current cursor position
-    // restore_screen_ = false;
 }
 
 void Term::save_screen() {
@@ -126,28 +125,44 @@ void Term::get_cursor_position(int& rows, int& cols) {
 }
 
 Term::Terminal::Terminal(unsigned options)
-    : BaseTerminal(bool(options & RAW_INPUT), bool(options & DISABLE_CTRL_C))
-    , clear_screen(bool(options & CLEAR_SCREEN))
+    : BaseTerminal(bool(options & CLEAR_SCREEN),
+        bool(options & RAW_INPUT), 
+        bool(options & DISABLE_CTRL_C))
+    , w(0)
+    , h(0)
 {
-    if (clear_screen)
-        save_screen();
+    update_size();
 }
 
-//Term::Terminal::Terminal(bool _clear_screen)
-//    : BaseTerminal(false, true), clear_screen{_clear_screen} {
-//    if (clear_screen)
-//        save_screen();
-//}
 
 Term::Terminal::~Terminal() {
-    if (clear_screen) {
-        restore_screen();
-    }
+}
+
+bool Term::Terminal::update_size() {
+    size_t old_w = w, old_h = h;
+    bool ok = Term::get_term_size(w, h);
+    if (!ok) throw ("Term::Terminal::update_size() failed");
+    return (old_w != w || old_h != h);
+}
+
+
+size_t Term::Terminal::get_w() const {
+    return w;
+}
+
+size_t Term::Terminal::get_h() const {
+    return h;
 }
 
 void Term::Terminal::draw_window (Window& win,
                                   size_t offset_x, size_t offset_y) {
-    int w, h;
-    get_term_size(h, w);
+    size_t w, h;
+    get_term_size(w, h);
+    std::cout << Term::cursor_off();//<< Term::clear_screen();
+    std::cout << Term::move_cursor(1, 1);
     std::cout << win.render(offset_x, offset_y, w, h) << std::flush;
+    if (!win.is_cursor_visible()) return;
+    std::cout << Term::move_cursor(win.get_cursor_x() + 1, win.get_cursor_y() + 1);
+    std::cout << cursor_on() << std::flush;
+
 }

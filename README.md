@@ -4,16 +4,14 @@
 
 This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first motivation was to make cpp-terminal utf-8 capable, the project underwent several major modifications which made it rather incompatible to the base project. The main differences are (or are planned to be):
 
-- All coordinates are now ordered `(column, row)` in *all* methods and functions.
+- All coordinate arguments are now specified in order `(column, row)`, in *all* methods and functions.
 - All coordinates count from zero (where row 0 is the top row and col 0 the left-most column) and have size_t type.
 - All arguments for rectangular areas have the format `(x0, y0, width, height)`, where (x0, y0) is the top left corner.
-
-- UTF support for raw keyboard input (limited to codepoints <= 0xffff on Windows, full support on Linux) and console output (the "Window" class will not properly handle grapheme clusters though). For this purpose, read_char() and read_char0() now return char32_t values.
+- **UTF support** for raw keyboard input (limited to codepoints <= 0xffff on Windows, full support on Linux) and console output (the "Window" class will not properly handle grapheme clusters though). For this purpose, read_char() and read_char0() now return char32_t values.
 - Supporting more ANSI sequences (especially for combinations with shift, alt and ctrl).
-- redesigned Window class, allowing for sub-windows (menus are planned, too)
-- the "disable ctrl-c" option is realized in another way, which is to technically *always* disable ctrl-c and let the function read_raw() catch any ctlr-c keyboard event and throw an exception if appropriate, i. e. if "disable ctrl-c" is not set. The benefit is proper clean-up at ctrl-c-triggered exit. On the other hand, ctrl-c will not be catched if read_raw() is not called, so if the programmer does not provide frequent get_char() calls or if something bad happens and the program gets stuck, ctrl-c will not work. I haven't yet made my mind if this is the best approach.
+- redesigned Window class, allowing sub-windows (menus are planned, too)
 
-The following is the original README.md. An adapted one is on the todo list.
+The following is the original README.md. An adapted one is on my todo list.
 
 
 

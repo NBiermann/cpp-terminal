@@ -9,8 +9,11 @@
 #include <termios.h>
 #include <unistd.h>
 #include <cerrno>
+#include <csignal>
 #endif
+
 #include <stdexcept>
+
 
 namespace Term::Private {
 extern const bool debug;
@@ -20,11 +23,19 @@ bool is_stdin_a_tty();
 // Returns true if the standard output is attached to a terminal
 bool is_stdout_a_tty();
 
-bool get_term_size(int& cols, int& rows);
+bool get_term_size(size_t& cols, size_t& rows);
 
 // Returns true if a character is read, otherwise immediately returns false
 // This can't be made inline
 bool read_raw(char32_t* s);
+
+void clean_up();
+
+#ifdef _WIN32
+BOOL WINAPI CtrlHandler(DWORD fdwCtrlType);
+#else
+void SignalHandler(int);
+#endif
 
 /* Note: the code that uses Terminal must be inside try/catch block, otherwise
  * the destructors will not be called when an exception happens and the
@@ -33,26 +44,31 @@ bool read_raw(char32_t* s);
  */
 class BaseTerminal {
    friend bool read_raw(char32_t*);
+   friend void clean_up();
    private:
 #ifdef _WIN32
-    HANDLE hout;
-    DWORD dwOriginalOutMode{};
-    bool out_console;
-    UINT out_code_page;
+    static HANDLE hout;
+    static DWORD dwOriginalOutMode;
+    static bool out_console;
+    static UINT out_code_page;
 
-    HANDLE hin;
-    DWORD dwOriginalInMode{};
-    UINT in_code_page;
+    static HANDLE hin;
+    static DWORD dwOriginalInMode;
+    static UINT in_code_page;
 #else
-    struct termios orig_termios{};
+    static struct termios orig_termios;
 #endif
 
   protected:
-    static bool keyboard_enabled;
+    static bool is_instantiated;
+    static bool clear_screen;
+    static bool raw_input;
     static bool disable_ctrl_c;
 
+
   public:
-    explicit BaseTerminal(bool a_enable_keyboard = false,
+    explicit BaseTerminal(bool a_clear_screen = true,
+                          bool a_raw_input = false,
                           bool a_disable_ctrl_c = true);
 
     virtual ~BaseTerminal() noexcept(false);

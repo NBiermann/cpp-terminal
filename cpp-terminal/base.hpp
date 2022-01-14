@@ -5,12 +5,14 @@
 
 namespace Term {
 
-enum {
+const char32_t UTF8_MAX = 0x0010ffff;
+
+enum opt {
     // Option flags for Terminal constructor
-    NONE = 0u,
-    CLEAR_SCREEN = 1u,
-    RAW_INPUT = 2u,
-    DISABLE_CTRL_C = 4u
+    NONE = 0,
+    CLEAR_SCREEN = 1,
+    RAW_INPUT = 2,
+    DISABLE_CTRL_C = 4
 };
 
 enum class style : uint8_t {
@@ -107,7 +109,7 @@ std::string erase_to_eol();
 
 bool is_stdin_a_tty();
 bool is_stdout_a_tty();
-bool get_term_size(int&, int&);
+bool get_term_size(size_t&, size_t&);
 
 void restore_screen();
 
@@ -121,14 +123,20 @@ class Window;
 class Terminal : public Private::BaseTerminal {
    private:
     size_t w{}, h{};
-    bool clear_screen{};
 
    public:
-    explicit Terminal(unsigned options = CLEAR_SCREEN);
     // providing no parameters will disable the keyboard and ctrl+c
     // explicit Terminal(bool a_clear_screen);
+    explicit Terminal(unsigned options = CLEAR_SCREEN);
+
     ~Terminal() override;
+
+    // returns true if it has changed the values of w or h
     bool update_size();
+
+    size_t get_w() const;
+    size_t get_h() const;
+
     void draw_window (Window&, size_t = 0, size_t = 0);
 };
 
