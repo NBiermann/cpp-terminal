@@ -10,6 +10,7 @@ This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first m
 - **UTF support** for raw keyboard input (limited to codepoints <= 0xffff on Windows, full support on Linux) and console output (the "Window" class will not properly handle grapheme clusters though). For this purpose, read_char() and read_char0() now return char32_t values.
 - Supporting more ANSI sequences (especially for combinations with shift, alt and ctrl).
 - redesigned Window class, allowing sub-windows (menus are planned, too)
+- Clean-up also when terminated by CTRL-C.
 
 The following is the original README.md. An adapted one is on my todo list.
 
