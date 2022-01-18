@@ -9,7 +9,9 @@
 
 namespace Term {
 
-enum class border_type : uint8_t {
+enum { MAX_GRAPHEME_LENGTH = 4 };
+
+enum class border_t {
     NO_BORDER,
     BLANK,
     ASCII,
@@ -73,45 +75,41 @@ bool operator!=(const bgColor &c1, const bgColor &c2);
 /* Represents a position in the terminal window, holding the character,
  * foreground and background colors, and the style of this specific cell.
  */
-struct Cell {
+class Cell {
+   public:
 	fgColor cell_fg;
 	bgColor cell_bg;
 	style cell_style;
-    char32_t ch;
-    Cell()
-        : cell_fg(fg::reset)
-        , cell_bg(bg::reset)
-        , cell_style(style::reset)
-        , ch(U' ') {}
-    Cell(char32_t c)
-        : cell_fg(fg::reset)
-        , cell_bg(bg::reset)
-        , cell_style(style::reset)
-        , ch(c) {}
-    Cell(char32_t c, fgColor a_fg, bgColor a_bg, style a_style)
-        : cell_fg(a_fg)
-        , cell_bg(a_bg)
-        , cell_style(a_style)
-        , ch(c) {}
+    uint8_t grapheme_length;
+    char32_t ch[MAX_GRAPHEME_LENGTH];
+    
+    Cell();
+    Cell(char32_t c);
+    Cell(const std::u32string&);
+    Cell(char32_t c, fgColor a_fg, bgColor a_bg, style a_style);
+    Cell(const std::u32string &s, fgColor a_fg, bgColor a_bg, style a_style);
 };
 
 
 class ChildWindow; // forward declaration
 
 /* Represents a rectangular window, as a 2D array of characters and their
- * attributes. The render method can convert this internal representation to a
- * string that when printed will show the Window on the screen.
+ * attributes. The draw_window() method of the Terminal class converts this 
+ * internal representation to a string which it prints to the console.
  *
  * Note: the characters are represented by char32_t, representing their UTF-32
  * code point. The natural way to represent a character in a terminal would be
  * a "unicode grapheme cluster", but due to a lack of a good library for C++
  * that could handle those, we simply use a Unicode code point as a character.
+ * 
+ * Note (Norbert, 2022/01/16): https://github.com/yhirose/cpp-unicodelib
+ * seems to provide all necessary methods. Added to my todo list.
  */
 class Window {
    protected :
     size_t w{}, h{};               // width and height of the window
-    bool fixed_width{};            // if w may not grow automatically
-    bool fixed_height{};           // same for h
+    bool width_fixed{};            // if w may not grow automatically
+    bool height_fixed{};           // same for h
     bool cursor_visibility{};
     size_t cursor_x{}, cursor_y{}; // current cursor position
     size_t tabsize{};
@@ -123,7 +121,6 @@ class Window {
     std::vector<ChildWindow*> children;
 
     void assure_pos(size_t x, size_t y);
-    Window merge_children() const;
 
    public :
     Window(size_t w_ = 0, size_t h_ = 0);
@@ -133,21 +130,21 @@ class Window {
     virtual bool is_base_window() {return true;}
 
     size_t get_w() const;
-    void set_w(size_t);
+    virtual void set_w(size_t);
     void trim_w(size_t);
 
     size_t get_h() const;
-    void set_h(size_t);
+    virtual void set_h(size_t);
     void trim_h(size_t);
 
-    void resize(size_t, size_t);
+    virtual void resize(size_t, size_t);
     void trim(size_t, size_t);
 
-    bool is_fixed_width() const;
-    void set_fixed_width (bool);
+    bool is_width_fixed() const;
+    void set_width_fixation (bool);
 
-    bool is_fixed_height() const;
-    void set_fixed_height (bool);
+    bool is_height_fixed() const;
+    void set_height_fixation (bool);
 
     size_t get_cursor_x() const;
     size_t get_cursor_y() const;
@@ -162,6 +159,10 @@ class Window {
 
     char32_t get_char(size_t, size_t) const;
     void set_char(size_t, size_t, char32_t);
+
+    uint8_t get_grapheme_length(size_t, size_t) const;
+    std::u32string get_grapheme(size_t, size_t) const;
+    void set_grapheme(size_t, size_t, const std::u32string&);
 
     fgColor get_fg(size_t, size_t) const;
     void set_fg(size_t, size_t, fgColor);
@@ -180,8 +181,6 @@ class Window {
     std::vector<std::vector<Cell>> get_grid() const;
     void set_grid(const std::vector<std::vector<Cell>> &);
     void copy_grid_from(const Window&);
-    void clear_grid();
-
 
     void set_default_fg(fgColor);
     void set_default_fg(uint8_t, uint8_t, uint8_t);
@@ -189,67 +188,89 @@ class Window {
     void set_default_bg(uint8_t, uint8_t, uint8_t);
     void set_default_style(style);
 
-    // Returns the number of characters actually printed
-    size_t print_str(const std::u32string&,
+    // Writes the argument string at starting at (cursor_x, cursor_y)
+    // into the grid and moves the cursor variables to the position 
+    // after the last printed character.
+    // Returns the number of characters (char32_t) actually written.
+    size_t write(const std::u32string&,
                      fgColor = fg::unspecified,
                      bgColor = bg::unspecified,
                      style = style::unspecified);
-    size_t print_str(const std::string&,
+
+    // Likewise, but returns the number of utf8 bytes actually written
+    size_t write(const std::string&,
                      fgColor = fg::unspecified,
                      bgColor = bg::unspecified,
-                     style = style::unspecified);
+                 style = style::unspecified);
+
+    size_t write(char32_t, fgColor, bgColor, style);
+
+    size_t write_wordwrap(const std::u32string&,
+                       fgColor = fg::unspecified,
+                       bgColor = bg::unspecified,
+                       style = style::unspecified);
+
+    size_t write_wordwrap(const std::string&,
+                       fgColor = fg::unspecified,
+                       bgColor = bg::unspecified,
+                       style = style::unspecified);
 
     void fill_fg(size_t, size_t, size_t, size_t, fgColor);
     void fill_bg(size_t, size_t, size_t, size_t, bgColor);
     void fill_style(size_t, size_t, size_t, size_t, style);
 
-    void print_rect(size_t, size_t, size_t, size_t,
-                    border_type = border_type::LINE,
-                    fgColor = fgColor(fg::reset),
-                    bgColor = bgColor(bg::reset));
-
-    void clear();
+    void print_rect(int, int, size_t, size_t,
+                    border_t = border_t::LINE,
+                    fgColor = fgColor(fg::unspecified),
+                    bgColor = bgColor(bg::unspecified));
 
     void clear_row(size_t);
+    void clear_grid();
+    void clear();
 
-    std::string render(size_t = 0, size_t = 0,
-                       size_t = std::string::npos, size_t = std::string::npos);
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
     ChildWindow* new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
-                           border_type b = border_type::LINE);
+                           border_t b = border_t::LINE);
     ChildWindow* get_child_ptr(size_t);
     size_t get_child_index(ChildWindow*) const;
     size_t get_children_count() const;
     void child_to_foreground(ChildWindow*);
     void child_to_background(ChildWindow*);
     void take_cursor_from_child(ChildWindow*);
+    Window merge_children() const;
 };
 
 // Represents a sub-window. Child windows may be nested.
 class ChildWindow : public Window {
     friend Window;
+
+   private:
     Window *parent_ptr;
     size_t offset_x{}, offset_y{};
     std::u32string title;
-    border_type border;
+    border_t border;
     fgColor border_fg;
     bgColor border_bg;
     bool visible{};
 
     ChildWindow(Window* ptr, size_t o_x, size_t o_y,
-                size_t w_, size_t h_, border_type b = border_type::LINE);
+                size_t w_, size_t h_, border_t b = border_t::LINE);
+    ChildWindow(const ChildWindow&) = default;
+    ChildWindow(ChildWindow&&) = default;
+    void merge_into_grid(Window*, size_t, size_t, size_t, size_t) const;
 
-public :
+   public :
     bool is_base_window() override {return false;}
     Window* get_parent_ptr() const;
+    bool is_inside_parent() const;
     size_t get_offset_x() const;
     size_t get_offset_y() const;
     std::pair<size_t, size_t> move_to(size_t, size_t);
     std::u32string get_title() const;
     void set_title(const std::string&);
     void set_title(const std::u32string&);
-    border_type get_border() const;
-    void set_border(border_type, fgColor = fg::reset, bgColor = bg::reset);
+    border_t get_border() const;
+    void set_border(border_t, fgColor = fg::unspecified, bgColor = bg::unspecified);
     fgColor get_border_fg() const;
     void set_border_fg(fgColor);
     bgColor get_border_bg() const;

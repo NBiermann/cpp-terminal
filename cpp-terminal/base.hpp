@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "private/platform.hpp"
+#include "platform.hpp"
 
 namespace Term {
 
@@ -15,7 +15,7 @@ enum opt {
     DISABLE_CTRL_C = 4
 };
 
-enum class style : uint8_t {
+enum class style : unsigned char {
     reset = 0,
     bold = 1,
     dim = 2,
@@ -30,7 +30,7 @@ enum class style : uint8_t {
     unspecified = 253
 };
 
-enum class fg : uint8_t {
+enum class fg : unsigned char {
     black = 30,
     red = 31,
     green = 32,
@@ -51,7 +51,7 @@ enum class fg : uint8_t {
     unspecified = 254
 };
 
-enum class bg : uint8_t {
+enum class bg : unsigned char {
     black = 40,
     red = 41,
     green = 42,
@@ -107,13 +107,12 @@ std::string erase_to_eol();
 
 bool is_stdin_a_tty();
 bool is_stdout_a_tty();
-bool get_term_size(size_t&, size_t&);
 
 void restore_screen();
 
 void save_screen();
 
-void get_cursor_position(int&, int&);
+void get_cursor_position(size_t&, size_t&);
 
 class Window;
 
@@ -135,7 +134,7 @@ class Terminal : public Private::BaseTerminal {
     size_t get_w() const;
     size_t get_h() const;
 
-    void draw_window (Window&, size_t = 0, size_t = 0);
+    void draw_window (Window&, size_t = 0, size_t = 0, size_t = 0, size_t = 0);
 };
 
 }  // namespace Term

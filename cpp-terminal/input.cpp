@@ -1,6 +1,5 @@
 #include "input.hpp"
-#include "private/platform.hpp"
-#include "private/conversion.hpp"
+#include "platform.hpp"
 #include <chrono>
 #include <thread>
 
@@ -242,7 +241,7 @@ char32_t Term::read_key0() {
     if (seq.size() == 1) {
         switch (seq[0]) {
         // Ctrl-Enter yields 0a on Windows, but on Linux 0d which is no
-        // different from Enter, so we'll bring these two in line
+        // different from Enter w/o Ctrl, so we'll bring these two in line
         case U'\x0a' : return ENTER;
         // Technically, it could make sense to define BACKSPACE as 7f.
 		// Sticking with the cpp-terminal convention though:

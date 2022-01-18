@@ -1,7 +1,6 @@
 #include "platform.hpp"
-#include "../input.hpp"
-#include "conversion.hpp"
-#include "../base.hpp"
+#include "input.hpp"
+#include "base.hpp"
 #include <iostream>
 #include <ios>
 #include <istream>
@@ -12,6 +11,9 @@
 
 
 const bool Term::Private::debug = false;
+
+using namespace std;
+
 
 bool Term::Private::is_stdin_a_tty() {
 #ifdef _WIN32
@@ -29,33 +31,6 @@ bool Term::Private::is_stdout_a_tty() {
 #endif
 }
 
-bool Term::Private::get_term_size(size_t& cols, size_t& rows) {
-#ifdef _WIN32
-    HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (hout == INVALID_HANDLE_VALUE) {
-        throw std::runtime_error("GetStdHandle(STD_OUTPUT_HANDLE) failed");
-    }
-    CONSOLE_SCREEN_BUFFER_INFO inf;
-    if (GetConsoleScreenBufferInfo(hout, &inf)) {
-        cols = static_cast<size_t>(inf.srWindow.Right - inf.srWindow.Left) + 1;
-        rows = static_cast<size_t>(inf.srWindow.Bottom - inf.srWindow.Top) + 1;
-        return true;
-    } else {
-        // This happens when we are not connected to a terminal
-        return false;
-    }
-#else
-    struct winsize ws {};
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
-        // This happens when we are not connected to a terminal
-        return false;
-    } else {
-        cols = static_cast<size_t>(ws.ws_col);
-        rows = static_cast<size_t>(ws.ws_row);
-        return true;
-    }
-#endif
-}
 
 
 bool Term::Private::read_raw(char32_t* s) {
@@ -67,11 +42,11 @@ bool Term::Private::read_raw(char32_t* s) {
     if (!_kbhit()) return false;
     int i = _getwch();
     if (i == EOF) throw std::runtime_error("_getwch() failed");
-    if (debug) std::cout << "(raw: " << Private::to_hex((int) i);
+    if (debug) std::cout << "(raw: " << hex << (int) i << dec;
 
     // Even in "virtual terminal input" mode, _getwch() appears to pass on
     // a few key combinations in Windows-specific manner rather than
-    // as ANSI escape sequences. These are apparently 2 bytes, the first 
+    // as ANSI escape sequences. These are apparently 2 bytes, the first
     // one being zero. Another _getwch() call is required.
     //    Ctrl - Num_Decimal_Point = 0 0x93
     //    Ctrl - Num_0 = 0, 0x92
@@ -92,15 +67,16 @@ bool Term::Private::read_raw(char32_t* s) {
     if (i == 0) {
         int j = _getwch();
         if (j == EOF) throw std::runtime_error("_getch() failed");
-        if (debug) std::cout << " " << Private::to_hex((int) j) << ") ";
+        if (debug) cout << " " << hex << (int) j << dec << ") ";
         *s = (j == 0x1c ? (Key::ALT | Key::ENTER) : Key::UNKNOWN);
         return true;
     }
-    if (debug) std::cout << ") ";
+    if (debug) cout << ") ";
     *s = static_cast<char32_t>(i);
     return true;
 
 #else
+    // TODO use unicodelib_encodings instead
     unsigned char c[3];
     int nread = read(STDIN_FILENO, c, 1);
     if (nread == -1 && errno != EAGAIN) {
@@ -108,16 +84,16 @@ bool Term::Private::read_raw(char32_t* s) {
     }
     if (nread == 0) return false;
     char32_t u = static_cast<char32_t>(c[0]);
-    if (debug) std::cout << "(raw: " << Private::to_hex((int) u);
+    if (debug) cout << "(raw: " << hex << (int) u << dec;
     int bytes_to_follow;
     if (u < 0x80) {
         *s = u;
-        if (debug) std::cout << ") ";
+        if (debug) cout << ") ";
         return true;
     }
     else if (u >> 5 == 6) {
-            bytes_to_follow = 1;
-            u = u & 0x1f;
+        bytes_to_follow = 1;
+        u = u & 0x1f;
     }
     else if (u >> 4 == 0xe) {
         bytes_to_follow = 2;
@@ -129,52 +105,53 @@ bool Term::Private::read_raw(char32_t* s) {
     }
     else {
         *s = Key::UNKNOWN;
+        if (debug) cout << ") ";
         return true;
     }
     nread = read(STDIN_FILENO, c, bytes_to_follow);
     if (nread == -1 && errno != EAGAIN) {
         throw std::runtime_error("read() failed");
     }
-    if (nread != bytes_to_follow) {
+    bool utf8ok = (nread == bytes_to_follow);
+    for (int i = 0; i != nread; ++i) {
+        utf8ok &= (c[i] >> 6 == 2);
+        if (utf8ok)
+            u = (u << 6) | (c[i] & 0x3f);
+        if (debug)
+            cout << "," << hex << (int)c[i] << dec;      
+    }
+    if (!utf8ok) {
         *s = Key::UNKNOWN;
+        if (debug)
+            cout << " -> ???) ";
         return true;
     }
-    for (int i = 0; i != bytes_to_follow; ++i) {
-        if (debug) std::cout << "," << Private::to_hex((int) c[i]);
-        if (c[i] >> 6 != 2) {
-            *s = Key::UNKNOWN;
-            return true;
-        }
-        u = (u << 6) | (c[i] & 0x3f);
-    }
     *s = u;
-    if (debug) std::cout << " -> " << Private::to_hex(int(*s)) << ") ";
+    if (debug) cout << " -> " << hex << (int) u << dec << ") ";
     return true;
 #endif
 }
 
 void Term::Private::clean_up() {
-    typedef BaseTerminal BT;
+    typedef Term::Private::BaseTerminal BT;
     if (!BT::is_instantiated) return;
     if (BT::clear_screen) {
         // restore screen
         std::cout << "\x1b[?1049l" << std::flush;
         // restore old cursor position
-        std::cout << "\x1b"
-                     "8"
-                  << std::flush;
+        std::cout << "\x1b""8" << std::flush;
     }
 #ifdef _WIN32
     if (BT::out_console) {
         SetConsoleOutputCP(BT::out_code_page);
         if (!SetConsoleMode(BT::hout, BT::dwOriginalOutMode)) {
-            throw std::runtime_error("SetConsoleMode() failed in clean-up");
+            throw std::runtime_error("SetConsoleMode(hout) failed in clean-up");
         }
     }
     if (BT::raw_input) {
         SetConsoleCP(BT::in_code_page);
         if (!SetConsoleMode(BT::hin, BT::dwOriginalInMode)) {
-            throw std::runtime_error("SetConsoleMode() failed in clean-up");
+            throw std::runtime_error("SetConsoleMode(hin) failed in clean-up");
         }
     }
 #else
@@ -222,7 +199,7 @@ Term::Private::BaseTerminal::BaseTerminal(bool a_clear_screen,
 #ifdef _WIN32
     out_console = is_stdout_a_tty();
     if (out_console) {
-        HANDLE hout = GetStdHandle(STD_OUTPUT_HANDLE);
+        hout = GetStdHandle(STD_OUTPUT_HANDLE);
         // Uncomment to hide vertical scroll bar:
         // ShowScrollBar(GetConsoleWindow(), SB_VERT, 0);
 
@@ -314,16 +291,44 @@ Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
     is_instantiated = false;
 }
 
+bool Term::Private::BaseTerminal::get_term_size(size_t& cols, size_t& rows) {
+#ifdef _WIN32
+    if (hout == INVALID_HANDLE_VALUE) {
+        throw std::runtime_error("BaseTerminal::get_term_size(): lost handle");
+    }
+    CONSOLE_SCREEN_BUFFER_INFO inf;
+    if (GetConsoleScreenBufferInfo(hout, &inf)) {
+        cols = static_cast<size_t>(inf.srWindow.Right - inf.srWindow.Left) + 1;
+        rows = static_cast<size_t>(inf.srWindow.Bottom - inf.srWindow.Top) + 1;
+        return true;
+    } else {
+        // This happens when we are not connected to a terminal
+        return false;
+    }
+#else
+    struct winsize ws {};
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+        // This happens when we are not connected to a terminal
+        return false;
+    } else {
+        cols = static_cast<size_t>(ws.ws_col);
+        rows = static_cast<size_t>(ws.ws_row);
+        return true;
+    }
+#endif
+}
+
+
 bool Term::Private::BaseTerminal::is_instantiated = false;
 bool Term::Private::BaseTerminal::clear_screen = false;
 bool Term::Private::BaseTerminal::raw_input = false;
 bool Term::Private::BaseTerminal::disable_ctrl_c = false;
 #ifdef _WIN32
-HANDLE Term::Private::BaseTerminal::hout{};
+HANDLE Term::Private::BaseTerminal::hout(INVALID_HANDLE_VALUE);
 DWORD Term::Private::BaseTerminal::dwOriginalOutMode{};
 bool Term::Private::BaseTerminal::out_console{};
 UINT Term::Private::BaseTerminal::out_code_page{};
-HANDLE Term::Private::BaseTerminal::hin{};
+HANDLE Term::Private::BaseTerminal::hin(INVALID_HANDLE_VALUE);
 DWORD Term::Private::BaseTerminal::dwOriginalInMode{};
 UINT Term::Private::BaseTerminal::in_code_page{};
 #else

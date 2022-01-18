@@ -3,6 +3,7 @@
 #ifdef _WIN32
 #include <conio.h>
 #include <io.h>
+#define NOMINMAX
 #include <windows.h>
 #else
 #include <sys/ioctl.h>
@@ -14,7 +15,6 @@
 
 #include <stdexcept>
 
-
 namespace Term::Private {
 extern const bool debug;
 
@@ -22,8 +22,6 @@ extern const bool debug;
 bool is_stdin_a_tty();
 // Returns true if the standard output is attached to a terminal
 bool is_stdout_a_tty();
-
-bool get_term_size(size_t& cols, size_t& rows);
 
 // Returns true if a character is read, otherwise immediately returns false
 // This can't be made inline
@@ -73,6 +71,7 @@ class BaseTerminal {
                           bool a_disable_ctrl_c = true);
 
     virtual ~BaseTerminal() noexcept(false);
+    bool get_term_size(size_t& cols, size_t& rows);
 };
 
 }  // namespace Term::Private

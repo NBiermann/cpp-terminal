@@ -19,7 +19,7 @@ enum Key : char32_t {
     CTRL_G,
     CTRL_H = 8,
     CTRL_I = 9,
-    CTRL_J,
+    CTRL_J = 0xa,
     CTRL_K,
     CTRL_L,
     CTRL_M = 0xd,
@@ -38,8 +38,10 @@ enum Key : char32_t {
     CTRL_Z,
 
     BACKSPACE = 8, // same as CTRL_H
-    ENTER = 0xd,   // same as CTRL_M
     TAB = 9,       // same as CTRL_I
+    LF = 0xa,      // same as CTRL_J
+    CR = 0xd,      // same as CTRL_M
+    ENTER = 0xd,   // same as CTRL_M and CR, for compatibility
     ESC = 0x1b,
 
     SHIFT =    0x1000000u, // flag
