@@ -27,6 +27,8 @@ bool is_stdout_a_tty();
 // This can't be made inline
 bool read_raw(char32_t* s);
 
+// Restore the initial state of console input/output, in case the destructor
+// of BaseTerminal cannot be called.
 void clean_up();
 
 // handler for CTRL-C event
