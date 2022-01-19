@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <chrono>
+#include <thread>
 
 using namespace std;
 using namespace Term;
@@ -29,14 +31,14 @@ int main()
             "window is obscured by another one, press Shift-F1/F2/F3 "
             "to bring it to the foreground. There is also "
             "a sub-subwindow located inside the green one. Press Ctrl-F4 to "
-            "make it visible. You may also try "
-            "and change the size of the console window with your mouse. --- ";
+            "make it visible. You may also "
+            "change the size of the console window with your mouse. --- ";
         size_t written{};
         do {
             written = win.write_wordwrap(info);
         } while(written == info.size());
         vector<size_t>
-            start_x{5, 22, 37, 4},
+            start_x{22, 5, 10, 4},
             start_y{7, 14, 8, 3},
             default_w{14, 8, 10, 5},
             default_h{8, 2, 4, 3};
@@ -51,7 +53,7 @@ int main()
             border_col{fg::green, fg::red, fg::bright_blue, fg::yellow};
         vector<string>
             title{ "1", "2", "3", "4" };
-        ChildWindow* cwin;
+        ChildWindow *cwin;
         vector<ChildWindow*> child;
         for (size_t i = 0; i != 4; ++i) {
             if (i < 3) {
@@ -73,6 +75,13 @@ int main()
             if (i < 3) cwin->show(); // initially, hide #4
             child.push_back(cwin);
         }
+        // prepare exit dialog (ctrl-c pressed)
+        ChildWindow *exit_dialog = win.new_child(0,0,10,2,border_t::LINE);
+        exit_dialog->set_width_fixation(false);
+        exit_dialog->set_border_fg(fg::magenta);
+        exit_dialog->set_default_bg(bg::magenta);
+        exit_dialog->write("Ctrl-C pressed.\nDo you want to exit? [Y/n]");
+
         size_t active_child = 0;
         vector<u32string> input(4);
         bool update = true;
@@ -96,7 +105,10 @@ int main()
                 update = false;
             }
             char32_t ch = read_key0();
-            if (!ch) continue;
+            if (!ch) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
             switch (ch) {
             case Key::ARROW_UP:
                 if (cwin->get_offset_y()) {
@@ -113,13 +125,15 @@ int main()
             case Key::ARROW_LEFT:
                 if (cwin->get_offset_x() > 
                     (cwin->get_border() == border_t::NO_BORDER ? 0u : 1u)) {
-                    cwin->move_to(cwin->get_offset_x() - 1, cwin->get_offset_y());
+                    cwin->move_to(cwin->get_offset_x() - 1, 
+                    cwin->get_offset_y());
                 }
                 update = true;
                 continue;
             case Key::ARROW_RIGHT:
                 if (cwin->get_w() + cwin->get_offset_x() < win.get_w()) {
-                    cwin->move_to(cwin->get_offset_x() + 1, cwin->get_offset_y());
+                    cwin->move_to(cwin->get_offset_x() + 1,
+                    cwin->get_offset_y());
                 }
                 update = true;
                 continue;
@@ -228,9 +242,27 @@ int main()
                 if (!accept_input) continue;
                 if (input[active_child].size()) input[active_child].pop_back();
                 break;
-            case Key::CTRL_C:
+            case Key::CTRL_C: {
+                // place exit dialog in center
+                int x = (win.get_w() - exit_dialog->get_w()) / 2;
+                int y = (win.get_h() - exit_dialog->get_h()) / 2;
+                exit_dialog->move_to(x < 0 ? 0 : x, y < 0 ? 0 : y);
+                exit_dialog->show();
+                win.take_cursor_from_child(exit_dialog);
+                term.draw_window(win);
+                char32_t key;
+                do {
+                    key = read_key();
+                } while (key != Key::ENTER && key != U'Y' && key != U'y' &&
+                         key != U'N' && key != U'n');
+                if (key == U'N' || key == U'n') {
+                    exit_dialog->hide();
+                    update = true;
+                    continue;
+                }
                 abort = true;
                 continue;
+            }
             default:
                 if (!accept_input) continue;
                 if (ch < U' ' || ch > UTF8_MAX) continue;
@@ -258,6 +290,6 @@ int main()
         cout << "unknown error." << endl;
         return 2;
     }
-    cout << "ctrl-c pressed" << endl;
+    cout << "program terminated by user." << endl;
     return 0;
 }
