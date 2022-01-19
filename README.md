@@ -2,19 +2,47 @@
 
 # Terminal-UTF
 
-This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first motivation was to make cpp-terminal utf-8 capable, the project underwent several major modifications which made it rather incompatible to the base project. The main differences are (or are planned to be):
+This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first motivation was to make cpp-terminal Unicode capable, the project underwent several major modifications which made it rather incompatible to the base project. The main differences are (or are planned to be):
 
-- All coordinate arguments are now specified in order `(column, row)`, in *all* methods and functions.
-- All coordinates count from zero (where row 0 is the top row and col 0 the left-most column) and have size_t type.
+- All coordinate arguments are now specified in order `(column, row)`, in all methods and functions.
+
+- All coordinates count from zero (where row 0 is the top row and col 0 the left-most column). The translation into and from ANSI sequences which actually count from 1 is done under the hood.
+
 - All arguments for rectangular areas have the format `(x0, y0, width, height)`, where (x0, y0) is the top left corner.
-- **UTF support** for raw keyboard input (limited to codepoints <= 0xffff on Windows, full support on Linux) and console output (the "Window" class will not properly handle grapheme clusters though). For this purpose, read_char() and read_char0() now return char32_t values.
-- Supporting more ANSI sequences (especially for combinations with shift, alt and ctrl).
-- redesigned Window class, allowing sub-windows (menus are planned, too)
-- Clean-up also when terminated by CTRL-C.
+
+- **Unicode support** (with the limitations described below). For this, `read_char()` and `read_char0()` now return `char32_t` values. 
+
+- The special keys have been assigned new internal values above the Unicode range. The modifier keys CTRL, ALT and SHIFT are now bit flags. For example, CTRL-F1 is internally representated as  
+
+  ```
+  Key::CTRL | Key::F1
+  ```
+
+  . 
+
+- Supporting more ANSI sequences (especially for combinations with SHIFT, ALT and CTRL).
+
+- Redesigned Window class, allowing sub-windows (menus are planned, too).
+
+- Improved handling of CTRL-C events.
+
+### Unicode support limitations
+
+#### Windows and Linux:
+
+- The Window class holds a `char32_t` array of fixed size for the Unicode grapheme cluster (i.e., the displayed character) in each cell. Grapheme clusters of greater length throw an exception. You may of course adjust the maximum value `MAX_GRAPHEME_LENGTH` in `window.hpp` to your needs.
+- I have not yet considered multi-width letters nor the `ZERO WIDTH JOINER` (`U+200D`). They will lead to unpredictable behavior.
+
+#### Windows only:
+
+- Only UCS-2 is supported in a Windows console.
+- Windows terminals do not yet correctly display combining characters. The Window::write() and Window::write_wordwrap() methods always try to perform a normalization as a workaround. Only if there is a matching precomposed character, the display will be correct. I hope that this restriction will eventually be fixed by the new Windows Terminal (https://github.com/Microsoft/Terminal).
+
+
+
+
 
 The following is the original README.md. An adapted one is on my todo list.
-
-
 
 # Terminal
 
