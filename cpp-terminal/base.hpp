@@ -7,9 +7,8 @@ namespace Term {
 
 const char32_t UTF8_MAX = 0x0010ffff;
 
-enum opt {
+enum {
     // Option flags for Terminal constructor
-    NONE = 0,
     CLEAR_SCREEN = 1,
     RAW_INPUT = 2,
     DISABLE_CTRL_C = 4
@@ -134,7 +133,11 @@ class Terminal : public Private::BaseTerminal {
     size_t get_w() const;
     size_t get_h() const;
 
-    void draw_window (Window&, size_t = 0, size_t = 0, size_t = 0, size_t = 0);
+    void draw_window (Window&, 
+                      size_t x0 = 0, 
+                      size_t y0 = 0, 
+                      size_t width = std::string::npos, 
+                      size_t height = std::string::npos);
 };
 
 }  // namespace Term
