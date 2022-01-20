@@ -244,6 +244,8 @@ int main()
                 break;
             case Key::CTRL_C: {
                 // place exit dialog in center
+                // bring it to the fore
+                exit_dialog->to_foreground();
                 int x = (win.get_w() - exit_dialog->get_w()) / 2;
                 int y = (win.get_h() - exit_dialog->get_h()) / 2;
                 exit_dialog->move_to(x < 0 ? 0 : x, y < 0 ? 0 : y);
