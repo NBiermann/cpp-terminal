@@ -11,6 +11,11 @@ namespace Term {
 
 enum { MAX_GRAPHEME_LENGTH = 4 };
 
+// allow word wrap after the following characters:
+extern std::u32string wrappable; // = U" \r\n-.,;/";
+// of these, allow the following to be omitted once at eol:
+extern std::u32string skippable; // = U" "; 
+
 enum class border_t {
     NO_BORDER,
     BLANK,

@@ -1,6 +1,6 @@
 #include "window.hpp"
 // https://github.com/yhirose/cpp-unicodelib
-// disable a few GCC/clang warnings (it's a long file)
+// disable some GCC/clang warnings (long files with a ton of warnings)
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wzero-as-null-pointer-constant"
@@ -14,8 +14,12 @@
 #endif // defined
 #include <stdexcept>
 
-using namespace std;
+// allow word wrap after the following characters:
+std::u32string Term::wrappable = U" \r\n-.,;/";
+// of these, allow the following to be omitted once at eol:
+std::u32string Term::skippable = U" \r\n"; 
 
+using namespace std;
 
 /***************
    Term::Color
@@ -565,10 +569,6 @@ size_t Term::Window::write_wordwrap(const std::u32string& s,
                                  fgColor a_fg,
                                  bgColor a_bg,
                                  style a_style) {
-    // allow word wrap after the following characters:
-    static const u32string wrappable = U" \r\n-.,;/";
-    // of these, allow the following to be omitted once at eol:
-    static const u32string skippable = U" \r\n"; 
     size_t i = 0;
     size_t grapheme_total_count = 0;
     size_t written = 0;
