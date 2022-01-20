@@ -66,14 +66,16 @@ class BaseTerminal {
     static bool raw_input;
     static bool disable_ctrl_c;
 
+    bool get_term_size(size_t& cols, size_t& rows);
 
   public:
     explicit BaseTerminal(bool a_clear_screen = true,
                           bool a_raw_input = false,
                           bool a_disable_ctrl_c = true);
+    BaseTerminal(const BaseTerminal&) = delete;
+    BaseTerminal& operator=(const BaseTerminal&) = delete;
 
-    virtual ~BaseTerminal() noexcept(false);
-    bool get_term_size(size_t& cols, size_t& rows);
+    virtual ~BaseTerminal() noexcept(false); 
 };
 
 }  // namespace Term::Private

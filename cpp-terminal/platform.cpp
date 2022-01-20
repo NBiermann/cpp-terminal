@@ -14,7 +14,6 @@ const bool Term::Private::debug = false;
 
 using namespace std;
 
-
 bool Term::Private::is_stdin_a_tty() {
 #ifdef _WIN32
     return _isatty(_fileno(stdin));
@@ -30,8 +29,6 @@ bool Term::Private::is_stdout_a_tty() {
     return isatty(STDOUT_FILENO);
 #endif
 }
-
-
 
 bool Term::Private::read_raw(char32_t* s) {
     if (!Term::Private::BaseTerminal::is_instantiated ||
@@ -278,9 +275,7 @@ Term::Private::BaseTerminal::BaseTerminal(bool a_clear_screen,
 #endif
     if (clear_screen) {
         // save current cursor position
-        std::cout << "\x1b"
-                     "7"
-                  << std::flush;
+        std::cout << "\x1b""7" << std::flush;
         // save screen
         std::cout << "\033[?1049h" << std::flush;
     }
@@ -293,8 +288,11 @@ Term::Private::BaseTerminal::~BaseTerminal() noexcept(false) {
 
 bool Term::Private::BaseTerminal::get_term_size(size_t& cols, size_t& rows) {
 #ifdef _WIN32
+    if (!is_instantiated) {
+        throw runtime_error("BaseTerminal::get_term_size(): not instantiated");
+    }
     if (hout == INVALID_HANDLE_VALUE) {
-        throw std::runtime_error("BaseTerminal::get_term_size(): lost handle");
+        throw runtime_error("BaseTerminal::get_term_size(): lost handle");
     }
     CONSOLE_SCREEN_BUFFER_INFO inf;
     if (GetConsoleScreenBufferInfo(hout, &inf)) {
