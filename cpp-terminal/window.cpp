@@ -14,10 +14,6 @@
 #endif // defined
 #include <stdexcept>
 
-// allow word wrap after the following characters:
-std::u32string Term::wrappable = U" \r\n-.,;/";
-// of these, allow the following to be omitted once at eol:
-std::u32string Term::skippable = U" \r\n"; 
 
 using namespace std;
 
@@ -622,6 +618,22 @@ size_t Term::Window::write_wordwrap(const std::string& s,
     std::u32string s32 = unicode::utf8::decode(s);
     size_t i = write_wordwrap(s32, a_fg, a_bg, a_style);
     return unicode::utf8::encode(s32.substr(0, i)).size();
+}
+
+u32string Term::Window::get_wrappable() const {
+    return wrappable;
+}
+
+void Term::Window::set_wrappable(const u32string &s) {
+    wrappable = s;
+}
+
+u32string Term::Window::get_skippable() const {
+    return skippable;
+}
+
+void Term::Window::set_skippable(const std::u32string &s) {
+    skippable = s;
 }
 
 void Term::Window::fill_fg(size_t x1, size_t y1,

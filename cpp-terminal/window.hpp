@@ -11,11 +11,6 @@ namespace Term {
 
 enum { MAX_GRAPHEME_LENGTH = 4 };
 
-// allow word wrap after the following characters:
-extern std::u32string wrappable; // = U" \r\n-.,;/";
-// of these, allow the following to be omitted once at eol:
-extern std::u32string skippable; // = U" "; 
-
 enum class border_t {
     NO_BORDER,
     BLANK,
@@ -125,6 +120,11 @@ class Window {
     std::vector<std::vector<Cell>> grid; // the cells (grid[0] is top row)
     std::vector<ChildWindow*> children;
 
+    // allow word wrap after the following characters:
+    std::u32string wrappable = U" \r\n-.,;/";
+    // of these, allow the following to be omitted once at eol:
+    std::u32string skippable = U" "; 
+
     void assure_pos(size_t x, size_t y);
 
    public :
@@ -219,6 +219,11 @@ class Window {
                        fgColor = fg::unspecified,
                        bgColor = bg::unspecified,
                        style = style::unspecified);
+
+    std::u32string get_wrappable() const;
+    void set_wrappable(const std::u32string&);
+    std::u32string get_skippable() const;
+    void set_skippable(const std::u32string&);
 
     void fill_fg(size_t, size_t, size_t, size_t, fgColor);
     void fill_bg(size_t, size_t, size_t, size_t, bgColor);
