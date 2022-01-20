@@ -1,44 +1,78 @@
 **Warning**: At the moment, cpp-terminal-utf is under heavy development and <u>should not be used</u>. A first stable beta version will be announced here.
 
+-----
+
 # Terminal-UTF
 
 This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first motivation was to make cpp-terminal Unicode capable, the project underwent several major modifications which made it rather incompatible to the base project. The main differences are (or are planned to be):
 
 - All coordinate arguments are now specified in order `(column, row)`, in all methods and functions.
-
 - All coordinates count from zero (where row 0 is the top row and col 0 the left-most column). The translation into and from ANSI sequences which actually count from 1 is done under the hood.
-
 - All arguments for rectangular areas have the format `(x0, y0, width, height)`, where (x0, y0) is the top left corner.
-
 - **Unicode support** (with the limitations described below). For this, `read_char()` and `read_char0()` now return `char32_t` values. 
-
-- The special keys have been assigned new internal values above the Unicode range. The modifier keys CTRL, ALT and SHIFT are now bit flags. For example, CTRL-F1 is internally representated as  
-
-  ```
-  Key::CTRL | Key::F1
-  ```
-
-  . 
-
+- For conversion from utf8 to utf32 and vice versa, the identification of grapheme clusters and for normalization, cpp-terminal-utf relies on the excellent header-only [cpp-unicodelib](https://github.com/yhirose/cpp-unicodelib) library. 
+- The special keys have been assigned new internal values above the Unicode range. The modifier keys CTRL, ALT and SHIFT are now bit flags. For example, CTRL-F1 is internally represented as  
+  `Key::CTRL | Key::F1`
 - Supporting more ANSI sequences (especially for combinations with SHIFT, ALT and CTRL).
-
 - Redesigned Window class, allowing sub-windows (menus are planned, too).
-
 - Improved handling of CTRL-C events.
 
 ### Unicode support limitations
 
 #### Windows and Linux:
 
-- The Window class holds a `char32_t` array of fixed size for the Unicode grapheme cluster (i.e., the displayed character) in each cell. Grapheme clusters of greater length throw an exception. You may of course adjust the maximum value `MAX_GRAPHEME_LENGTH` in `window.hpp` to your needs.
-- I have not yet considered multi-width letters nor the `ZERO WIDTH JOINER` (`U+200D`). They will lead to unpredictable behavior.
+- The `Window` class holds a `char32_t` array of fixed size for the Unicode grapheme cluster (i.e., the displayed character) in each cell. Grapheme clusters of greater length throw an exception. You may of course adjust the maximum value `MAX_GRAPHEME_LENGTH` in `window.hpp` to your needs.
+- I have not considered multi-width letters nor the `ZERO WIDTH JOINER` (`U+200D`). These will lead to unpredictable behavior.
 
 #### Windows only:
 
-- Only UCS-2 is supported in a Windows console.
-- Windows terminals do not yet correctly display combining characters. The Window::write() and Window::write_wordwrap() methods always try to perform a normalization as a workaround. Only if there is a matching precomposed character, the display will be correct. I hope that this restriction will eventually be fixed by the new Windows Terminal (https://github.com/Microsoft/Terminal).
+- AFAIK, only Unicode characters in BMP (i.e., below `U'\x10000'`) are supported in a Windows console.
+- Windows terminals do not yet correctly display combining characters. The `Window::write()` and `Window::write_wordwrap()` methods perform a NFC normalization on the passed string as a workaround. Only if there is a matching composed character, a combining sequence will display correctly. I hope that this restriction will eventually be fixed by the new Windows Terminal (https://github.com/Microsoft/Terminal).
+
+-----
+
+### Documentation
+
+#### class Terminal
+
+```
+enum {
+    CLEAR_SCREEN = 1,
+    RAW_INPUT = 2,
+    DISABLE_CTRL_C = 4
+};
+
+Constructor:
+Terminal(unsigned options = CLEAR_SCREEN);
+
+Methods:
+bool update_size()
+size_t get_w() // get width (in columns)
+size_t get_h() // get height (in rows)
+void draw_window (Window &win, 
+				  size_t x0 = 0, 
+				  size_t y0 = 0, 
+				  size_t width = string::npos, 
+				  size_t height = string::npos)
+```
+
+Terminal allows only one instance. Options can be combined using `|` (bitwise OR), e.g. `Terminal term(CLEAR_SCREEN | RAW_INPUT)`.
+
+`CLEAR_SCREEN`: Saves the state of the console and clears the screen. The destructor of Terminal will restore the original content of the console.
+
+`RAW_INPUT`: disables echoing and line input and gives you the ability to capture special keys like F1-F12, arrow keys and so on. Use `read_char()` and `read_char0()` to process the user input.
+
+`DISABLE_CTRL_C`: As the name implies, CTRL-C will be processed as a normal key stroke rather than send a SIGINT signal to the application.
+
+`update_size()` returns true if the dimensions of the console have changed since the last call.
+
+`get_w()` and `get_h()` return the saved values of the last `update_size()` call. (Note: the `Terminal` constructor and `draw_window()` call `update_size()`. Apart from that, there is no automatic check of the real terminal size.)
+
+`draw_window()` renders the content of a Window object into the appropriate ANSI sequences and prints the result to the console. You may specify a cut-out of the window by the arguments (x0, y0, width, height) which for example allows for a simple scrolling mechanism. Parts of the window respectively the cut-out which exceed the actual console size will be ignored.
 
 
+
+-----
 
 
 
