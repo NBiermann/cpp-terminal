@@ -118,40 +118,43 @@ bool Term::operator!=(const Term::bgColor &c1, const Term::bgColor &c2) {
  */
 
 Term::Cell::Cell()
-    : cell_fg(fg::unspecified),
-      cell_bg(bg::unspecified),
-      cell_style(style::unspecified),
-      grapheme_length(0),
-      ch(U"")
+    : cell_fg(fg::unspecified)
+    , cell_bg(bg::unspecified)
+    , cell_style(style::unspecified)
+    , grapheme_length(0)
+    , ch(U"")
 {}
 
 Term::Cell::Cell(char32_t c)
-    : cell_fg(fg::unspecified),
-      cell_bg(bg::unspecified),
-      cell_style(style::unspecified),
-      grapheme_length(1),
-      ch{c}
+    : cell_fg(fg::unspecified)
+    , cell_bg(bg::unspecified)
+    , cell_style(style::unspecified)
+    , grapheme_length(1)
+    , ch{c}
 {}
 
 Term::Cell::Cell(const u32string& s){
     *this = Cell(s, fg::unspecified, bg::unspecified, style::unspecified);
 }
 
-Term::Cell::Cell(char32_t c, Term::fgColor a_fg, Term::bgColor a_bg, Term::style a_style)
-    : cell_fg(a_fg),
-      cell_bg(a_bg),
-      cell_style(a_style),
-      grapheme_length(1),
-      ch{c}
+Term::Cell::Cell(char32_t c, 
+                 Term::fgColor a_fg, 
+                 Term::bgColor a_bg, 
+                 Term::style a_style)
+    : cell_fg(a_fg)
+    , cell_bg(a_bg)
+    , cell_style(a_style)
+    , grapheme_length(1)
+    , ch{c}
 {}
 
 Term::Cell::Cell(const u32string& s, fgColor a_fg, bgColor a_bg, style a_style)
     : cell_fg(a_fg), cell_bg(a_bg), cell_style(a_style) {
     if (unicode::grapheme_count(s) > 1)
-        throw runtime_error("Cell::Cell() cannot fill with more than 1 grapheme");
+        throw runtime_error("Cell::Cell() string has more than 1 grapheme");
     if (s.size() > MAX_GRAPHEME_LENGTH)
         throw runtime_error(
-            "Window::set_grapheme(): grapheme cluster too long");
+            "Window::set_grapheme(): grapheme exceeds MAX_GRAPHEME_LENGTH");
     grapheme_length = s.size();
     s.copy(ch, s.size());
 }
@@ -372,7 +375,8 @@ void Term::Window::set_fg(size_t x, size_t y, fgColor c) {
     grid[y][x].cell_fg = c;
 }
 
-void Term::Window::set_fg(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b) {
+void Term::Window::set_fg(size_t x, size_t y, 
+                          uint8_t r, uint8_t g, uint8_t b) {
     assure_pos(x, y);
     grid[y][x].cell_fg = fgColor(r, g, b);
 }
@@ -390,7 +394,8 @@ void Term::Window::set_bg(size_t x, size_t y, bgColor c) {
     grid[y][x].cell_bg = c;
 }
 
-void Term::Window::set_bg(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b) {
+void Term::Window::set_bg(size_t x, size_t y, 
+                          uint8_t r, uint8_t g, uint8_t b) {
     assure_pos(x, y);
     grid[y][x].cell_bg = bgColor(r, g, b);
 }
@@ -692,8 +697,8 @@ void Term::Window::fill_style(size_t x1, size_t y1,
 }
 
 void Term::Window::print_rect(
-    int x1, // exceptionally, integer here. Negative values allow the rectangle
-    int y1, // to be partially out of the window.
+    int x1, // exceptionally, integer here. Negative values allow the 
+    int y1, // rectangle to be partially out of the window.
     size_t width,
     size_t height,
     border_t b,

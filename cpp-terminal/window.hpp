@@ -75,8 +75,9 @@ public :
 bool operator==(const bgColor &c1, const bgColor &c2);
 bool operator!=(const bgColor &c1, const bgColor &c2);
 
-/* Represents a position in the terminal window, holding the character,
- * foreground and background colors, and the style of this specific cell.
+/* Represents a cell in the terminal window, holding the character (i.e., the
+ * Unicode grapheme cluster), the foreground and background colors and the 
+ * style of this specific cell.
  */
 class Cell {
    public:
@@ -96,17 +97,10 @@ class Cell {
 
 class ChildWindow; // forward declaration
 
-/* Represents a rectangular window, as a 2D array of characters and their
- * attributes. The draw_window() method of the Terminal class converts this 
- * internal representation to a string which it prints to the console.
- *
- * Note: the characters are represented by char32_t, representing their UTF-32
- * code point. The natural way to represent a character in a terminal would be
- * a "unicode grapheme cluster", but due to a lack of a good library for C++
- * that could handle those, we simply use a Unicode code point as a character.
- * 
- * Note (Norbert, 2022/01/16): https://github.com/yhirose/cpp-unicodelib
- * seems to provide all necessary methods. Added to my todo list.
+/* Represents a rectangular window, as a 2D array of characters and their 
+ * attributes as defined in the "Cell" class. The draw_window() method of the
+ * "Terminal" class converts this internal representation to a string which 
+ * it prints to the console.
  */
 class Window {
    protected :
@@ -212,19 +206,22 @@ class Window {
     size_t write(const std::string&,
                      fgColor = fg::unspecified,
                      bgColor = bg::unspecified,
-                 style = style::unspecified);
+                     style = style::unspecified);
 
-    size_t write(char32_t, fgColor, bgColor, style);
+    size_t write(char32_t,
+                     fgColor = fg::unspecified,
+                     bgColor = bg::unspecified,
+                     style = style::unspecified);
 
     size_t write_wordwrap(const std::u32string&,
-                       fgColor = fg::unspecified,
-                       bgColor = bg::unspecified,
-                       style = style::unspecified);
+                     fgColor = fg::unspecified,
+                     bgColor = bg::unspecified,
+                     style = style::unspecified);
 
     size_t write_wordwrap(const std::string&,
-                       fgColor = fg::unspecified,
-                       bgColor = bg::unspecified,
-                       style = style::unspecified);
+                     fgColor = fg::unspecified,
+                     bgColor = bg::unspecified,
+                     style = style::unspecified);
 
     std::u32string get_wrappable() const;
     void set_wrappable(const std::u32string&);
@@ -237,8 +234,8 @@ class Window {
 
     void print_rect(int, int, size_t, size_t,
                     border_t = border_t::LINE,
-                    fgColor = fgColor(fg::unspecified),
-                    bgColor = bgColor(bg::unspecified));
+                    fgColor = fg::unspecified,
+                    bgColor = bg::unspecified);
 
     void clear_row(size_t);
     void clear_grid();
