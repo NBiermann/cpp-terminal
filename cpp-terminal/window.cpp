@@ -54,8 +54,12 @@ std::string Term::fgColor::render() {
     else return Term::color(fg_val);
 }
 
-bool Term::fgColor::is_reset() {
+bool Term::fgColor::is_reset() const {
     return (rgb_mode == false && fg_val == fg::reset);
+}
+
+bool Term::fgColor::is_unspecified() const {
+    return (rgb_mode == false && fg_val == fg::unspecified);
 }
 
 bool Term::operator==(const Term::fgColor &c1, const Term::fgColor &c2) {
@@ -88,8 +92,12 @@ std::string Term::bgColor::render () {
     else return Term::color(bg_val);
 }
 
-bool Term::bgColor::is_reset() {
+bool Term::bgColor::is_reset() const {
     return (rgb_mode == false && bg_val == bg::reset);
+}
+
+bool Term::bgColor::is_unspecified() const {
+    return (rgb_mode == false && bg_val == bg::unspecified);
 }
 
 bool Term::operator==(const Term::bgColor &c1, const Term::bgColor &c2) {
@@ -110,23 +118,23 @@ bool Term::operator!=(const Term::bgColor &c1, const Term::bgColor &c2) {
  */
 
 Term::Cell::Cell()
-    : cell_fg(fg::reset),
-      cell_bg(bg::reset),
-      cell_style(style::reset),
+    : cell_fg(fg::unspecified),
+      cell_bg(bg::unspecified),
+      cell_style(style::unspecified),
       grapheme_length(0),
       ch(U"")
 {}
 
 Term::Cell::Cell(char32_t c)
-    : cell_fg(fg::reset),
-      cell_bg(bg::reset),
-      cell_style(style::reset),
+    : cell_fg(fg::unspecified),
+      cell_bg(bg::unspecified),
+      cell_style(style::unspecified),
       grapheme_length(1),
       ch{c}
 {}
 
-Term::Cell::Cell(const u32string& s) {
-    Cell(s, fg::reset, bg::reset, style::reset);
+Term::Cell::Cell(const u32string& s){
+    *this = Cell(s, fg::unspecified, bg::unspecified, style::unspecified);
 }
 
 Term::Cell::Cell(char32_t c, Term::fgColor a_fg, Term::bgColor a_bg, Term::style a_style)
@@ -140,7 +148,7 @@ Term::Cell::Cell(char32_t c, Term::fgColor a_fg, Term::bgColor a_bg, Term::style
 Term::Cell::Cell(const u32string& s, fgColor a_fg, bgColor a_bg, style a_style)
     : cell_fg(a_fg), cell_bg(a_bg), cell_style(a_style) {
     if (unicode::grapheme_count(s) > 1)
-        throw runtime_error("Window::set_grapheme(): more than 1 grapheme");
+        throw runtime_error("Cell::Cell() cannot fill with more than 1 grapheme");
     if (s.size() > MAX_GRAPHEME_LENGTH)
         throw runtime_error(
             "Window::set_grapheme(): grapheme cluster too long");
@@ -315,10 +323,12 @@ void Term::Window::set_tabsize(size_t ts) {
 
 char32_t Term::Window::get_char(size_t x, size_t y) const {
     // TODO test grapheme length first?!
-    if (y < grid.size() && x < grid[y].size()) {
-        return grid[y][x].ch[0];
+    if (y >= grid.size() || x >= grid[y].size() ||
+        grid[y][x].grapheme_length == 0) {
+        return U' ';
     }
-    else return U' ';
+    return grid[y][x].ch[0];
+
 }
 
 void Term::Window::set_char(size_t x, size_t y, char32_t c) {
@@ -351,9 +361,10 @@ void Term::Window::set_grapheme(size_t x, size_t y, const u32string& s) {
 }
 
 Term::fgColor Term::Window::get_fg(size_t x, size_t y) const {
-    if (y < grid.size() && x < grid[y].size())
-        return grid[y][x].cell_fg;
-    return default_fg;
+    if (y >= grid.size() || x >= grid[y].size() ||
+        grid[y][x].cell_fg.is_unspecified())
+        return default_fg;
+    return grid[y][x].cell_fg;
 }
 
 void Term::Window::set_fg(size_t x, size_t y, fgColor c) {
@@ -368,9 +379,10 @@ void Term::Window::set_fg(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b) {
 
 
 Term::bgColor Term::Window::get_bg(size_t x, size_t y) const {
-   if (y < grid.size() && x < grid[y].size())
-        return grid[y][x].cell_bg;
-    return default_bg;
+    if (y >= grid.size() || x >= grid[y].size() ||
+        grid[y][x].cell_bg.is_unspecified())
+        return default_bg;
+    return grid[y][x].cell_bg;
 }
 
 void Term::Window::set_bg(size_t x, size_t y, bgColor c) {
@@ -384,9 +396,10 @@ void Term::Window::set_bg(size_t x, size_t y, uint8_t r, uint8_t g, uint8_t b) {
 }
 
 Term::style Term::Window::get_style(size_t x, size_t y) const {
-    if (y < grid.size() && x < grid[y].size())
-        return grid[y][x].cell_style;
-    else return default_style;
+    if (y >= grid.size() || x >= grid[y].size() ||
+        grid[y][x].cell_style == style::unspecified)
+        return default_style;
+    return grid[y][x].cell_style;
 }
 
 void Term::Window::set_style(size_t x, size_t y, style c) {
@@ -427,12 +440,20 @@ void Term::Window::copy_grid_from(const Term::Window & win) {
     set_grid(win.get_grid());
 }
 
+Term::fgColor Term::Window::get_default_fg() const {
+    return default_fg;
+}
+
 void Term::Window::set_default_fg(fgColor c) {
     default_fg = c;
 }
 
 void Term::Window::set_default_fg(uint8_t r, uint8_t g, uint8_t b) {
     default_fg = fgColor(r, g, b);
+}
+
+Term::bgColor Term::Window::get_default_bg() const {
+    return default_bg;
 }
 
 
@@ -442,6 +463,10 @@ void Term::Window::set_default_bg(bgColor c) {
 
 void Term::Window::set_default_bg(uint8_t r, uint8_t g, uint8_t b) {
     default_bg = bgColor(r, g, b);
+}
+
+Term::style Term::Window::get_default_style() const {
+    return default_style;
 }
 
 
@@ -537,6 +562,7 @@ size_t Term::Window::write(const std::u32string& s,
             // ... or keep cursor in bottom right corner and exit loop
             y = h - 1;
             x = w - 1;
+            ++i;
             break;
         }
     }
@@ -581,15 +607,14 @@ size_t Term::Window::write_wordwrap(const std::u32string& s,
             // j to next grapheme
             j += unicode::grapheme_length(s.data() + j);
             ++grapheme_count;
-            if (j == s.size()) break;
+            if (is_wrappable || j == s.size()) break;
             // end of line?
             if (grapheme_count == span) {
                 if (skippable.find(s[j]) != string::npos) {
                     skip_next = true;
-                    is_wrappable = true; 
                     break;
                 } 
-                if (!is_wrappable && cursor_x > 0) {
+                if (cursor_x > 0) {
                     // cannot wrap after last character in line:
                     // move to new line before writing from i,
                     // unless the whole line was unwrappable (cursor_x == 0)

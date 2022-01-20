@@ -38,7 +38,8 @@ public :
     uint8_t get_g() const;
     uint8_t get_b() const;
     virtual std::string render() = 0;
-    virtual bool is_reset() = 0;
+    virtual bool is_reset() const = 0;
+    virtual bool is_unspecified() const = 0;
     virtual ~Color() = default;
 };
 
@@ -51,7 +52,8 @@ public :
     fgColor(const uint8_t, const uint8_t, const uint8_t);
     fg get_fg() const;
     std::string render() override;
-    bool is_reset() override;
+    bool is_reset() const override;
+    bool is_unspecified() const override;
 };
 
 bool operator==(const fgColor &, const fgColor &);
@@ -66,7 +68,8 @@ public :
     bgColor(const uint8_t, const uint8_t, const uint8_t);
     bg get_bg() const;
     std::string render () override;
-    bool is_reset() override;
+    bool is_reset() const override;
+    bool is_unspecified() const override;
 };
 
 bool operator==(const bgColor &c1, const bgColor &c2);
@@ -121,9 +124,9 @@ class Window {
     std::vector<ChildWindow*> children;
 
     // allow word wrap after the following characters:
-    std::u32string wrappable = U" \r\n-.,;/";
+    std::u32string wrappable = U" \r\n-.,;:/\\";
     // of these, allow the following to be omitted once at eol:
-    std::u32string skippable = U" "; 
+    std::u32string skippable = U" \r\n"; 
 
     void assure_pos(size_t x, size_t y);
 
@@ -187,10 +190,13 @@ class Window {
     void set_grid(const std::vector<std::vector<Cell>> &);
     void copy_grid_from(const Window&);
 
+    fgColor get_default_fg() const;
     void set_default_fg(fgColor);
     void set_default_fg(uint8_t, uint8_t, uint8_t);
+    bgColor get_default_bg() const;
     void set_default_bg(bgColor);
     void set_default_bg(uint8_t, uint8_t, uint8_t);
+    style get_default_style() const;
     void set_default_style(style);
 
     // Writes the argument string at starting at (cursor_x, cursor_y)

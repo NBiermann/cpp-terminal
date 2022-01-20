@@ -195,17 +195,30 @@ void Term::Terminal::draw_window (Window& win,
             bool update_fg = false;
             bool update_bg = false;
             bool update_style = false;
-            Cell current_cell = merged_win.get_cell(i, j);
-            if (current_fg != current_cell.cell_fg) {
-                current_fg = current_cell.cell_fg;
+            Cell cell = merged_win.get_cell(i, j);
+            if (!cell.grapheme_length || cell.ch[0] == U'\0') {
+                cell.grapheme_length = 1;
+                cell.ch[0] = U' ';
+            }
+            if (cell.cell_fg.is_unspecified()) {
+                cell.cell_fg = win.get_default_fg();
+            }
+            if (cell.cell_bg.is_unspecified()) {
+                cell.cell_bg = win.get_default_bg();
+            }
+            if (cell.cell_style == style::unspecified) {
+                cell.cell_style = win.get_default_style();
+            }
+            if (current_fg != cell.cell_fg) {
+                current_fg = cell.cell_fg;
                 update_fg = true;
             }
-            if (current_bg != current_cell.cell_bg) {
-                current_bg = current_cell.cell_bg;
+            if (current_bg != cell.cell_bg) {
+                current_bg = cell.cell_bg;
                 update_bg = true;
             }
-            if (current_style != current_cell.cell_style) {
-                current_style = current_cell.cell_style;
+            if (current_style != cell.cell_style) {
+                current_style = cell.cell_style;
                 update_style = true;
                 if (current_style == style::reset) {
                     // style::reset resets fg and bg colors too, we have to
@@ -217,27 +230,16 @@ void Term::Terminal::draw_window (Window& win,
                 }
             }
             // Set style first, as style::reset will reset colors too
-            if (update_style)
-                out.append(color(current_cell.cell_style));
-            if (update_fg)
-                out.append(current_cell.cell_fg.render());
-            if (update_bg)
-                out.append(current_cell.cell_bg.render());
-            if (current_cell.grapheme_length == 0 ||
-                current_cell.ch[0] == '\x0')  // unspecified cell: print blank
-                out.push_back(' ');
-            else
-                unicode::utf8::encode(current_cell.ch,
-                                      current_cell.grapheme_length, out);
+            if (update_style) out.append(color(cell.cell_style));
+            if (update_fg) out.append(cell.cell_fg.render());
+            if (update_bg) out.append(cell.cell_bg.render());
+            unicode::utf8::encode(cell.ch, cell.grapheme_length, out);
         }
     }
     // reset colors and style at the end
-    if (!current_fg.is_reset())
-        out.append(color(fg::reset));
-    if (!current_bg.is_reset())
-        out.append(color(bg::reset));
-    if (current_style != style::reset)
-        out.append(color(style::reset));
+    if (!current_fg.is_reset()) out.append(color(fg::reset));
+    if (!current_bg.is_reset()) out.append(color(bg::reset));
+    if (current_style != style::reset) out.append(color(style::reset));
     cout << out << flush;
     // place cursor
     if (!win.is_cursor_visible()) return;
@@ -245,7 +247,7 @@ void Term::Terminal::draw_window (Window& win,
     size_t cursor_x = win.get_cursor_x() - x0;
     if (cursor_x >= w || cursor_x >= win.get_w()) return;
     if (win.get_cursor_y() < y0) return;
-    size_t cursor_y = (int)win.get_cursor_y() - y0;  
+    size_t cursor_y = win.get_cursor_y() - y0;  
     if (cursor_y >= h || cursor_y >= win.get_h()) return;
     cout << Term::move_cursor(cursor_x, cursor_y);
     cout << cursor_on() << flush;
