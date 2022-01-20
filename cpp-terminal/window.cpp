@@ -775,8 +775,7 @@ Term::ChildWindow* Term::Window::new_child(size_t o_x, size_t o_y,
 
 Term::ChildWindow* Term::Window::get_child_ptr(size_t i) {
     if (i < children.size()) return children[i];
-    throw runtime_error("Term::Window::get_child(): "
-                        "child index out of bounds");
+    throw runtime_error("get_child(): child index out of bounds");
 }
 
 size_t Term::Window::get_child_index(ChildWindow *cwin) const {
@@ -792,21 +791,22 @@ size_t Term::Window::get_children_count() const {
 
 void Term::Window::child_to_foreground(ChildWindow* cwin) {
     size_t i = get_child_index(cwin);
-    size_t j = children.size() - 1;
-    if (i == j)
-        return;
-    ChildWindow* temp = children[j];
-    children[j] = children[i];
+    if (i == children.size() - 1) return;
+    ChildWindow* temp = children[i];
+    for (; i != children.size() - 1; ++i) {
+        children[i] = children[i + 1];
+    }
     children[i] = temp;
 }
 
 void Term::Window::child_to_background(ChildWindow* cwin) {
     size_t i = get_child_index(cwin);
-    if (i == 0)
-        return;
-    ChildWindow* temp = children[0];
-    children[0] = children[i];
-    children[i] = temp;
+    if (i == 0) return;
+    ChildWindow* temp = children[i];
+    for (; i; --i) {
+        children[i] = children[i - 1];
+    }
+    children[0] = temp;
 }
 
 void Term::Window::take_cursor_from_child(ChildWindow* cwin) {
