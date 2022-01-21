@@ -90,7 +90,7 @@ bool Term::Private::read_raw(char32_t* s) {
         utf8ok = (nread == length - 1); 
     }
     size_t bytes;
-    utf8ok &= unicode::utf8::decode_codepoint(c, length, &bytes, s);
+    utf8ok &= unicode::utf8::decode_codepoint(c, length, bytes, *s);
     if (!utf8ok) *s = Key::UNKNOWN;
     return true;
     /*
