@@ -13,7 +13,7 @@ This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first m
 - For conversion from utf8 to utf32 and vice versa, the identification of grapheme clusters and for normalization, cpp-terminal-utf relies on the excellent header-only [cpp-unicodelib](https://github.com/yhirose/cpp-unicodelib) library. 
 - The special keys have been assigned new internal values above the Unicode range. The modifier keys CTRL, ALT and SHIFT are now bit flags. For example, CTRL-F1 is internally represented as  
   `Key::CTRL | Key::F1`
-- Supporting more ANSI sequences (especially for combinations with SHIFT, ALT and CTRL).
+- Support for more ANSI sequences (especially for combinations with SHIFT, ALT and CTRL).
 - Redesigned Window class, allowing sub-windows (menus are planned, too).
 - Improved handling of CTRL-C events.
 
