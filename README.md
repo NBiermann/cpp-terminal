@@ -42,10 +42,8 @@ enum {
     DISABLE_CTRL_C = 4
 };
 
-Constructor:
 Terminal(unsigned options = CLEAR_SCREEN);
 
-Methods:
 bool update_size()
 size_t get_w() // get width (in columns)
 size_t get_h() // get height (in rows)
@@ -56,9 +54,11 @@ void draw_window (Window &win,
 				  size_t height = string::npos)
 ```
 
-Terminal allows only one instance. Options can be combined using `|` (bitwise OR), e.g. `Terminal term(CLEAR_SCREEN | RAW_INPUT)`.
+Terminal allows for only one instance. Options can be combined using `|` (bitwise OR), e.g. `Terminal term(CLEAR_SCREEN | RAW_INPUT)`.
 
-`CLEAR_SCREEN`: Saves the state of the console and clears the screen. The destructor of Terminal will restore the original content of the console.
+It is strongly advised to create an instance of Terminal before using any of the methods provided by cpp-terminal-utf. It is also recommended to put this and any operations on the console in a try-catch block to ensure that the Terminal destructor gets called and the console continues to work properly if something in the program goes wrong.
+
+`CLEAR_SCREEN`: Saves the state of the console and clears the screen. The destructor of Terminal will restore the original state and content of the console.
 
 `RAW_INPUT`: disables echoing and line input and gives you the ability to capture special keys like F1-F12, arrow keys and so on. Use `read_char()` and `read_char0()` to process the user input.
 
@@ -66,11 +66,11 @@ Terminal allows only one instance. Options can be combined using `|` (bitwise OR
 
 `update_size()` returns true if the dimensions of the console have changed since the last call.
 
-`get_w()` and `get_h()` return the saved values of the last `update_size()` call. (Note: the `Terminal` constructor and `draw_window()` call `update_size()`. Apart from that, there is no automatic check of the real terminal size.)
+`get_w()` and `get_h()` return the saved values of the last `update_size()` call. (Note: the `Terminal` constructor and `draw_window()` call `update_size()`. Apart from that, it is up to the programmer to check or not check the actual window size of the console.)
 
 `draw_window()` renders the content of a Window object into the appropriate ANSI sequences and prints the result to the console. You may specify a cut-out of the window by the arguments (x0, y0, width, height) which for example allows for a simple scrolling mechanism. Parts of the window respectively the cut-out which exceed the actual console size will be ignored.
 
-
+#### class fgColor, bgColor
 
 -----
 
