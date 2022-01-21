@@ -1,6 +1,7 @@
 #include "platform.hpp"
 #include "input.hpp"
 #include "base.hpp"
+#include "unicodelib_encodings.h"
 #include <iostream>
 #include <ios>
 #include <istream>
@@ -73,7 +74,26 @@ bool Term::Private::read_raw(char32_t* s) {
     return true;
 
 #else
-    // TODO use unicodelib_encodings instead
+    char c[4];
+    int nread = read(STDIN_FILENO, c, 1);
+    if (nread == -1 && errno != EAGAIN) {
+        throw std::runtime_error("read() failed");
+    }
+    if (nread == 0) return false;
+    size_t length = unicode::utf8::codepoint_length(c, 1);
+    bool utf8ok = true;
+    if (length > 1) {
+        nread = read(STDIN_FILENO, c + 1, length - 1);
+        if (nread == -1 && errno != EAGAIN) {
+            throw std::runtime_error("read() failed");
+        }
+        utf8ok = (nread == length - 1); 
+    }
+    size_t bytes;
+    utf8ok &= unicode::utf8::decode_codepoint(c, length, &bytes, s);
+    if (!utf8ok) *s = Key::UNKNOWN;
+    return true;
+    /*
     unsigned char c[3];
     int nread = read(STDIN_FILENO, c, 1);
     if (nread == -1 && errno != EAGAIN) {
@@ -126,6 +146,7 @@ bool Term::Private::read_raw(char32_t* s) {
     *s = u;
     if (debug) cout << " -> " << hex << (int) u << dec << ") ";
     return true;
+    */
 #endif
 }
 
