@@ -1,6 +1,6 @@
-#include "../cpp-terminal-utf/cpp-terminal/base.hpp"
-#include "../cpp-terminal-utf/cpp-terminal/window.hpp"
-#include "../cpp-terminal-utf/cpp-terminal/input.hpp"
+#include "../cpp-terminal/base.hpp"
+#include "../cpp-terminal/window.hpp"
+#include "../cpp-terminal/input.hpp"
 
 #include <iostream>
 #include <string>
@@ -12,11 +12,12 @@ using namespace std;
 using namespace Term;
 
 int main()
-{   
+{
     try {
         Terminal term(CLEAR_SCREEN | RAW_INPUT | DISABLE_CTRL_C);
-        Window win (term.get_w(), term.get_h());
-        u32string info =
+        Window win; // sizing will take place in the main loop
+        win.set_wordwrap(true);
+        u32string info = // will be filled into win in the main loop
             U"This demo illustrates several features of the \"Window\" "
             "class. Type some text into the green window, press F2 or "
             "F3 to place the cursor in the red or blue window, and F1 to go "
@@ -33,10 +34,6 @@ int main()
             "a sub-subwindow located inside the green one. Press Ctrl-F4 to "
             "make it visible. You may also "
             "change the size of the console window with your mouse. --- ";
-        size_t written{};
-        do {
-            written = win.write_wordwrap(info);
-        } while(written == info.size());
         vector<size_t>
             start_x{22, 5, 10, 4},
             start_y{7, 14, 8, 3},
@@ -61,10 +58,10 @@ int main()
                     default_h[i], border_t::LINE);
             }
             else {
-                // Create Window #4 as sub-window of #1 
-                cwin = child[0]->new_child(start_x[3], start_y[3], 
+                // Create Window #4 as sub-window of #1
+                cwin = child[0]->new_child(start_x[3], start_y[3],
                         default_w[3], default_h[3], border_t::LINE);
-            }           
+            }
             cwin->set_width_fixation(fixed_w[i]);
             cwin->set_height_fixation(fixed_h[i]);
             cwin->set_border_fg(border_col[i]);
@@ -75,6 +72,7 @@ int main()
             if (i < 3) cwin->show(); // initially, hide #4
             child.push_back(cwin);
         }
+        child[2]->set_wordwrap(true);
         // prepare exit dialog (ctrl-c pressed)
         ChildWindow *exit_dialog = win.new_child(0,0,10,2,border_t::LINE);
         exit_dialog->set_width_fixation(false);
@@ -90,11 +88,12 @@ int main()
         while (!abort) {
             cwin = child[active_child];
             cwin->set_border(border_t::DOUBLE_LINE);
-            if (term.update_size()) {
+            if (term.update_size() || win.get_w() == 0 || win.get_h() == 0) {
                 win.clear_grid();
                 win.resize(term.get_w(), term.get_h());
+                size_t written;
                 do {
-                    written = win.write_wordwrap(info);
+                    written = win.write(info);
                 } while(written == info.size());
                 update = true;
             }
@@ -112,20 +111,22 @@ int main()
             switch (ch) {
             case Key::ARROW_UP:
                 if (cwin->get_offset_y()) {
-                    cwin->move_to(cwin->get_offset_x(), cwin->get_offset_y() - 1);
+                    cwin->move_to(cwin->get_offset_x(), 
+                        cwin->get_offset_y() - 1);
                 }
                 update = true;
                 continue;
             case Key::ARROW_DOWN:
                 if (cwin->get_h() + cwin->get_offset_y() < win.get_h()) {
-                    cwin->move_to(cwin->get_offset_x(), cwin->get_offset_y() + 1);
+                    cwin->move_to(cwin->get_offset_x(), 
+                        cwin->get_offset_y() + 1);
                 }
                 update = true;
                 continue;
             case Key::ARROW_LEFT:
-                if (cwin->get_offset_x() > 
-                    (cwin->get_border() == border_t::NO_BORDER ? 0u : 1u)) {
-                    cwin->move_to(cwin->get_offset_x() - 1, 
+                if (cwin->get_offset_x() >
+                    (cwin->get_border() == border_t::NO_BORDER ? 0 : 1)) {
+                    cwin->move_to(cwin->get_offset_x() - 1,
                     cwin->get_offset_y());
                 }
                 update = true;
@@ -145,7 +146,7 @@ int main()
                 cwin->move_to(cwin->get_offset_x(), new_y);
                 update = true;
                 continue;
-            }   
+            }
             case Key::CTRL | Key::ARROW_DOWN:
             case Key::PAGE_DOWN: {
                 int b = (cwin->get_border() == border_t::NO_BORDER ? 0 : 1);
@@ -198,39 +199,46 @@ int main()
                 update = true;
                 continue;
             case Key::CTRL | Key::F1:
-                cwin = child[0];
-                if (cwin->is_visible()) cwin->hide();
-                else cwin->show();
+                if (child[0]->is_visible()) child[0]->hide();
+                else child[0]->show();
                 update = true;
                 continue;
             case Key::CTRL | Key::F2:
-                cwin = child[1];
-                if (cwin->is_visible()) cwin->hide();
-                else cwin->show();
+                if (child[1]->is_visible()) child[1]->hide();
+                else child[1]->show();
                 update = true;
                 continue;
             case Key::CTRL | Key::F3:
-                cwin = child[2];
-                if (cwin->is_visible()) cwin->hide();
-                else cwin->show();
+                if (child[2]->is_visible()) child[2]->hide();
+                else child[2]->show();
                 update = true;
                 continue;
             case Key::CTRL | Key::F4:
                 cwin = child[3];
-                if (cwin->is_visible()) cwin->hide();
-                else cwin->show();
+                if (child[3]->is_visible()) {
+                    child[3]->hide();
+                } else {
+                    child[3]->show();
+                    // parent child must be visible too
+                    child[0]->show(); 
+                }
                 update = true;
                 continue;
-            case Key::SHIFT | Key::F1:
             case Key::SHIFT | Key::F4:
+                if (!child[3]->is_visible()) continue;
+                [[fallthrough]];
+            case Key::SHIFT | Key::F1:
+                if (!child[0]->is_visible()) continue;
                 child[0]->to_foreground();
                 update = true;
                 continue;
             case Key::SHIFT | Key::F2:
+                if (!child[1]->is_visible()) continue;
                 child[1]->to_foreground();
                 update = true;
                 continue;
             case Key::SHIFT | Key::F3:
+                if (!child[2]->is_visible()) continue;
                 child[2]->to_foreground();
                 update = true;
                 continue;
@@ -240,14 +248,17 @@ int main()
                 break;
             case Key::BACKSPACE:
                 if (!accept_input) continue;
-                if (input[active_child].size()) input[active_child].pop_back();
-                break;
+                if (input[active_child].size()) {
+                    input[active_child].pop_back();
+                    break;
+                } else {
+                    continue;
+                }
             case Key::CTRL_C: {
                 // place exit dialog in center
                 int x = (win.get_w() - exit_dialog->get_w()) / 2;
                 int y = (win.get_h() - exit_dialog->get_h()) / 2;
                 exit_dialog->move_to(x < 0 ? 0 : x, y < 0 ? 0 : y);
-                // bring it to the fore
                 exit_dialog->to_foreground();
                 exit_dialog->show();
                 win.take_cursor_from_child(exit_dialog);
@@ -265,29 +276,34 @@ int main()
                 abort = true;
                 continue;
             }
+            case Key::TAB:
+                if (!accept_input) continue;
+                input[active_child].push_back(ch);
+                break;
             default:
                 if (!accept_input) continue;
-                if (ch < U' ' || ch > UTF8_MAX) continue;
+                if (ch < U' ' || ch == U'\x7f' || ch > UTF8_MAX) continue;
                 input[active_child].push_back(ch);
             } // switch
             bool repeat = false;
+            // to prevent auto-growing subwindows from exceeding the main 
+            // window's size, trim the input string until the subwindow fits.
             do {
                 cwin->clear_grid();
-                size_t characters_printed = (active_child == 2 ?
-                    cwin->write_wordwrap(input[active_child]) :
-                    cwin->write(input[active_child]));
+                size_t characters_printed = cwin->write(input[active_child]);
                 input[active_child].resize(characters_printed);
+                // make auto-shrinking
                 cwin->trim(default_w[active_child], default_h[active_child]);
                 repeat = !cwin->is_inside_parent();
                 if (repeat) input[active_child].pop_back();
             } while (repeat);
             update = true;
         }
-    } 
+    }
     catch (runtime_error& e) {
         cout << e.what() << endl;
         return 1;
-    } 
+    }
     catch (...) {
         cout << "unknown error." << endl;
         return 2;
