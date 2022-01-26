@@ -37,7 +37,7 @@ string Term::color24_bg(unsigned int red,
 }
 
 void Term::write(const string& s) {
-    std::cout << s << flush;
+    cout << s << flush;
 }
 
 string Term::cursor_off() {
