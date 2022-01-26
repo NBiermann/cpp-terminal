@@ -158,7 +158,7 @@ size_t Term::Terminal::get_h() const {
     return h;
 }
 
-void Term::Terminal::draw_window (Window& win,
+void Term::Terminal::draw_window (const Window& win,
                                   size_t x0, 
                                   size_t y0,
                                   size_t width, 

@@ -133,7 +133,7 @@ class Terminal : public Private::BaseTerminal {
     size_t get_w() const;
     size_t get_h() const;
 
-    void draw_window (Window&, 
+    void draw_window (const Window&, 
                       size_t x0 = 0, 
                       size_t y0 = 0, 
                       size_t width = std::string::npos, 
