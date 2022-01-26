@@ -839,7 +839,7 @@ Term::Window Term::Window::cutout(size_t x0, size_t y0,
     }
     else {
         cropped.set_cursor(cursor_x - x0, cursor_y - y0);
-        if (is_cursor_visible) cropped.show_cursor();
+        if (is_cursor_visible()) cropped.show_cursor();
         else cropped.hide_cursor();
     }
     return cropped;
