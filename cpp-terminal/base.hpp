@@ -1,7 +1,7 @@
 #pragma once
 
-#include <string>
 #include "platform.hpp"
+#include <string>
 
 namespace Term {
 
