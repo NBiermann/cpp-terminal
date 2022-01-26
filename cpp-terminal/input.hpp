@@ -7,7 +7,8 @@ namespace Term {
 enum Key : char32_t {
     // Note that for A-Z in combination with CTRL,
     // the below numbers are used instead of CTRL | 'a' etc.
-    // Similarly, Alt-Control-P is ALT | CTRL_P and not CTRL | ALT | 'P'
+    // E.g., the key combination Alt-Control-P yields
+    // ALT | CTRL_P and not CTRL | ALT | 'P'
     CTRL_A = 1,
     CTRL_B,
     CTRL_C,
@@ -46,13 +47,9 @@ enum Key : char32_t {
     ENTER = 0xd,   // same as CTRL_M and CR, for compatibility
     ESC = 0x1b,
     DEL = 0x7f,
-
-    SHIFT =    0x1000000u, // flag
-    ALT =      0x2000000u, // flag
-    CTRL =     0x4000000u, // flag
-
-    NON_PRINTABLES_FLOOR = 0x8000000u,
-    ARROW_UP,
+    
+    // non-printables
+    ARROW_UP = 0x1000000u,
     ARROW_DOWN,
     ARROW_RIGHT,
     ARROW_LEFT,
@@ -75,21 +72,24 @@ enum Key : char32_t {
     F11,
     F12,
 
+    // modifiers (flags)
+    SHIFT =   0x2000000u,
+    ALT =     0x4000000u,
+    CTRL =    0x8000000u,
+
     UNKNOWN = 0xfffffffu
 };
-
-extern std::map<std::u32string, char32_t> sequences;
 
 // Waits for a key press, translates escape codes, decodes utf8
 char32_t read_key();
 
 // If there was a key press, returns the translated key from escape codes
-// resp. the decoded key from utf8, otherwise returns 0.
-// If the escape code is not supported, returns Key::UNKNWON
+// resp. the decoded UTF codepoint, otherwise returns 0.
+// If the escape code is not supported, returns Key::UNKNOWN
 char32_t read_key0();
 
 namespace Private {
-
+extern std::map<std::u32string, char32_t> sequences;
 std::u32string read_sequence();
 std::u32string read_sequence0();
 char32_t decode_sequence(const std::u32string&);

@@ -5,7 +5,7 @@
 
 using namespace std;
 
-map<u32string, char32_t> Term::sequences = {
+map<u32string, char32_t> Term::Private::sequences = {
     {U"\x1b[A", ARROW_UP},
     {U"\x1b[1;2A", SHIFT | ARROW_UP},
     {U"\x1b[1;3A", ALT | ARROW_UP},
