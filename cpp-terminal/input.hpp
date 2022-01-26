@@ -1,6 +1,4 @@
 #pragma once
-#ifndef inPuT_heAderGUArD
-#define inPuT_heAderGUArD
 
 #include <map>
 #include <string>
@@ -35,7 +33,11 @@ enum Key : char32_t {
     CTRL_W,
     CTRL_X,
     CTRL_Y,
-    CTRL_Z,
+    CTRL_Z, // = 0x1a
+    CTRL_4 = 0x1c,
+    CTRL_5,
+    CTRL_6,
+    CTRL_7,
 
     BACKSPACE = 8, // same as CTRL_H
     TAB = 9,       // same as CTRL_I
@@ -43,6 +45,7 @@ enum Key : char32_t {
     CR = 0xd,      // same as CTRL_M
     ENTER = 0xd,   // same as CTRL_M and CR, for compatibility
     ESC = 0x1b,
+    DEL = 0x7f,
 
     SHIFT =    0x1000000u, // flag
     ALT =      0x2000000u, // flag
@@ -57,7 +60,6 @@ enum Key : char32_t {
     PAGE_DOWN,
     HOME,
     END,
-    DEL,
     INSERT,
     NUMERIC_5, // "5" on the numeric block with "Num" disabled. Linux-only.
     F1,
@@ -86,16 +88,12 @@ char32_t read_key();
 // If the escape code is not supported, returns Key::UNKNWON
 char32_t read_key0();
 
-} // namespace Term
-
-namespace Term::Private {
+namespace Private {
 
 std::u32string read_sequence();
-
 std::u32string read_sequence0();
+char32_t decode_sequence(const std::u32string&);
 
 } // namespace Term::Private
 
-
-
-#endif // inPuT_heAderGUArD
+} // namespace Term

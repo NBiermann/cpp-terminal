@@ -3,10 +3,7 @@
 #include <chrono>
 #include <thread>
 
-
 using namespace std;
-using namespace Term;
-using Term::Key;
 
 map<u32string, char32_t> Term::sequences = {
     {U"\x1b[A", ARROW_UP},
@@ -237,30 +234,11 @@ char32_t Term::read_key() {
 
 char32_t Term::read_key0() {
     u32string seq = Term::Private::read_sequence0();
-    if (!seq.size()) return 0;
-    if (seq.size() == 1) {
-        switch (seq[0]) {
-        // Ctrl-Enter yields 0a on Windows, but on Linux 0d which is no
-        // different from Enter w/o Ctrl, so we'll bring these two in line
-        case U'\x0a' : return ENTER;
-        // Technically, it could make sense to define BACKSPACE as 7f.
-		// Sticking with the cpp-terminal convention though:
-        case U'\x7f' : return BACKSPACE;
-        case U'\x08' : return CTRL | BACKSPACE;
-        default : return seq[0];
-        }
-    }
-    if (sequences.count(seq)) {
-        return sequences[seq];
-    }
-    else if (seq.size() == 2 || seq[0] == ESC) {
-        return ALT | seq[1];
-    }
-    return Key::UNKNOWN;
+    return Term::Private::decode_sequence(seq);
 }
 
 
-u32string Term::Private::read_sequence(){
+u32string Term::Private::read_sequence() {
     u32string seq = read_sequence0();
     while (seq.empty()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -285,4 +263,31 @@ u32string Term::Private::read_sequence0() {
         } while (c < 0x40);
     }
     return seq;
+}
+
+char32_t Term::Private::decode_sequence(const u32string& seq) {
+    if (!seq.size())
+        return 0;
+    if (seq.size() == 1) {
+        switch (seq[0]) {
+            // Ctrl-Enter yields 0a on Windows, but on Linux 0d which is no
+            // different from Enter w/o Ctrl, so we'll bring these two in line
+            case U'\x0a':
+                return ENTER;
+            // Oddly enough, hitting BACKSPACE yields the ASCII code for DEL
+            // (0x7f) while CTRL-BACKSPACE yields 0x08 (Backspace)
+            case U'\x7f':
+                return BACKSPACE;
+            case U'\x08':
+                return CTRL | BACKSPACE;
+            default:
+                return seq[0];
+        }
+    }
+    if (sequences.count(seq)) {
+        return sequences[seq];
+    } else if (seq.size() == 2 || seq[0] == ESC) {
+        return ALT | seq[1];
+    }
+    return Key::UNKNOWN;
 }
