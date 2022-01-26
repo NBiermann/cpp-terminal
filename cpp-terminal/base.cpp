@@ -1,11 +1,14 @@
 #include "base.hpp"
+#include "platform.hpp"
+#include "window.hpp"
+#include "unicodelib_encodings.h"
+
 #include <iostream>
 #include <string>
 #include <algorithm>
 
-#include "unicodelib_encodings.h"
-#include "platform.hpp"
-#include "window.hpp"
+
+
 
 using namespace std;
 
@@ -20,17 +23,17 @@ string Term::color(bg value) {
 }
 
 string Term::color24_fg(unsigned int red,
-                             unsigned int green,
-                             unsigned int blue) {
+                        unsigned int green,
+                        unsigned int blue) {
     return "\033[38;2;" + to_string(red) + ';' + to_string(green) +
-           ';' + to_string(blue) + 'm';
+        ';' + to_string(blue) + 'm';
 }
 
 string Term::color24_bg(unsigned int red,
-                             unsigned int green,
-                             unsigned int blue) {
+                        unsigned int green,
+                        unsigned int blue) {
     return "\033[48;2;" + to_string(red) + ';' + to_string(green) +
-           ';' + to_string(blue) + 'm';
+        ';' + to_string(blue) + 'm';
 }
 
 void Term::write(const string& s) {
@@ -54,8 +57,7 @@ string Term::clear_screen_buffer() {
 }
 
 string Term::move_cursor(size_t col, size_t row) {
-    return "\x1b[" + to_string(row + 1) + ';' +
-        to_string(col + 1) + 'H';
+    return "\x1b[" + to_string(row + 1) + ';' + to_string(col + 1) + 'H';
 }
 
 string Term::move_cursor_right(int col) {
@@ -77,17 +79,13 @@ bool Term::is_stdout_a_tty() {
 }
 
 void Term::restore_screen() {
-    write("\033[?1049l");  // restore screen
-    write(
-        "\033"
-        "8");  // restore current cursor position
+    write("\033[?1049l"); // restore screen
+    write("\033""8");     // restore current cursor position
 }
 
 void Term::save_screen() {
-    write(
-        "\033"
-        "7");              // save current cursor position
-    write("\033[?1049h");  // save screen
+    write("\033""7");     // save current cursor position
+    write("\033[?1049h"); // save screen
 }
 
 void Term::get_cursor_position(size_t& cols, size_t& rows) {
@@ -130,7 +128,8 @@ void Term::get_cursor_position(size_t& cols, size_t& rows) {
 }
 
 Term::Terminal::Terminal(unsigned options)
-    : BaseTerminal(bool(options & CLEAR_SCREEN),
+    : BaseTerminal(
+        bool(options & CLEAR_SCREEN),
         bool(options & RAW_INPUT),
         bool(options & DISABLE_CTRL_C))
     , w(0)
@@ -160,8 +159,10 @@ size_t Term::Terminal::get_h() const {
 }
 
 void Term::Terminal::draw_window (Window& win,
-                                  size_t x0, size_t y0,
-                                  size_t width, size_t height) {
+                                  size_t x0, 
+                                  size_t y0,
+                                  size_t width, 
+                                  size_t height) {
     update_size();
     if (!width) width = w;
     if (!height) height = h;
@@ -170,12 +171,11 @@ void Term::Terminal::draw_window (Window& win,
     // adjust the cut-out to fit both win and console window
     width = std::min({width, w, win.get_w() - x0});
     height = std::min({height, h, win.get_h() - y0});
-
     string out = Term::cursor_off() + Term::clear_screen_buffer() +
                  Term::move_cursor(0, 0);
     Window merged_win = win.merge_children();
-    fgColor current_fg(fg::reset);
-    bgColor current_bg(bg::reset);
+    FgColor current_fg(fg::reset);
+    BgColor current_bg(bg::reset);
     style current_style = style::reset;
     const size_t x1 = x0 + width;
     const size_t y1 = y0 + height;
