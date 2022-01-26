@@ -1,6 +1,4 @@
 #pragma once
-#ifndef wIndOW_HeaDERguARd
-#define wIndOW_HeaDERguARd
 
 #include "base.hpp"
 #include "input.hpp"
@@ -40,40 +38,37 @@ public :
     virtual std::string render() = 0;
     virtual bool is_reset() const = 0;
     virtual bool is_unspecified() const = 0;
-    virtual ~Color() = default;
 };
 
 // foreground color
-class fgColor : public Color  {
+class FgColor : public Color  {
     friend class Window;
 public :
-    fgColor();
-    fgColor(fg c);
-    fgColor(const uint8_t, const uint8_t, const uint8_t);
+    FgColor();
+    FgColor(fg c);
+    FgColor(const uint8_t, const uint8_t, const uint8_t);
     fg get_fg() const;
+    bool operator==(const FgColor&) const;
+    bool operator!=(const FgColor&) const;
     std::string render() override;
     bool is_reset() const override;
     bool is_unspecified() const override;
 };
 
-bool operator==(const fgColor &, const fgColor &);
-bool operator!=(const fgColor &, const fgColor &);
-
 // background color
-class bgColor : public Color {
+class BgColor : public Color {
     friend class Window;
 public :
-    bgColor();
-    bgColor(bg);
-    bgColor(const uint8_t, const uint8_t, const uint8_t);
+    BgColor();
+    BgColor(bg);
+    BgColor(const uint8_t, const uint8_t, const uint8_t);
     bg get_bg() const;
+    bool operator==(const BgColor&) const;
+    bool operator!=(const BgColor&) const;
     std::string render () override;
     bool is_reset() const override;
     bool is_unspecified() const override;
 };
-
-bool operator==(const bgColor &c1, const bgColor &c2);
-bool operator!=(const bgColor &c1, const bgColor &c2);
 
 /* Represents a cell in the terminal window, holding the character (i.e., the
  * Unicode grapheme cluster), the foreground and background colors and the 
@@ -81,17 +76,17 @@ bool operator!=(const bgColor &c1, const bgColor &c2);
  */
 class Cell {
    public:
-	fgColor cell_fg;
-	bgColor cell_bg;
+	FgColor cell_fg;
+	BgColor cell_bg;
 	style cell_style;
     uint8_t grapheme_length;
     char32_t ch[MAX_GRAPHEME_LENGTH];
     
     Cell();
-    Cell(char32_t c);
+    Cell(char32_t);
     Cell(const std::u32string&);
-    Cell(char32_t c, fgColor a_fg, bgColor a_bg, style a_style);
-    Cell(const std::u32string &s, fgColor a_fg, bgColor a_bg, style a_style);
+    Cell(char32_t, FgColor, BgColor, style);
+    Cell(const std::u32string&, FgColor, BgColor, style);
 };
 
 
@@ -108,21 +103,55 @@ class Window {
     bool width_fixed{};            // if w may not grow automatically
     bool height_fixed{};           // same for h
     bool cursor_visibility{};
+    bool wordwrap{};
     size_t cursor_x{}, cursor_y{}; // current cursor position
     size_t tabsize{};
 
-    fgColor default_fg;
-    bgColor default_bg;
+    FgColor default_fg;
+    BgColor default_bg;
     style default_style{};
     std::vector<std::vector<Cell>> grid; // the cells (grid[0] is top row)
     std::vector<ChildWindow*> children;
 
-    // allow word wrap after the following characters:
-    std::u32string wrappable = U" \r\n-.,;:/\\";
-    // of these, allow the following to be omitted once at eol:
-    std::u32string skippable = U" \r\n"; 
+    // word wrap control
+    // allow word wrap after whitespace and any of the following characters:
+    std::u32string wrap_after = U"-.,;:/\\)]}";
+    // allow word wrap before whitespace and any of the following characters:
+    std::u32string wrap_before = U"([{";
+    // if line is completely filled and whitespace follows, skip
+    // one whitespace character:
+    bool skip_whitespace_at_eol = true;
 
-    void assure_pos(size_t x, size_t y);
+    void assure_pos(size_t x, size_t y);     
+    // Writes the argument string at starting at (cursor_x, cursor_y)
+    // into the grid and moves the cursor variables to the position
+    // after the last printed character.
+    // Returns the number of codepoints (char32_t) actually written.
+    size_t simple_write(const std::u32string&,
+                             FgColor = fg::unspecified,
+                             BgColor = bg::unspecified,
+                             style = style::unspecified);
+
+    // Likewise, but returns the number of utf8 bytes actually written
+    size_t simple_write(const std::string&,
+                             FgColor = fg::unspecified,
+                             BgColor = bg::unspecified,
+                             style = style::unspecified);
+
+    size_t simple_write(char32_t,
+                             FgColor = fg::unspecified,
+                             BgColor = bg::unspecified,
+                             style = style::unspecified);
+
+    size_t write_wordwrap(const std::u32string&,
+                          FgColor = fg::unspecified,
+                          BgColor = bg::unspecified,
+                          style = style::unspecified);
+
+    size_t write_wordwrap(const std::string&,
+                          FgColor = fg::unspecified,
+                          BgColor = bg::unspecified,
+                          style = style::unspecified);
 
    public :
     Window(size_t w_ = 0, size_t h_ = 0);
@@ -166,12 +195,12 @@ class Window {
     std::u32string get_grapheme(size_t, size_t) const;
     void set_grapheme(size_t, size_t, const std::u32string&);
 
-    fgColor get_fg(size_t, size_t) const;
-    void set_fg(size_t, size_t, fgColor);
+    FgColor get_fg(size_t, size_t) const;
+    void set_fg(size_t, size_t, FgColor);
     void set_fg(size_t, size_t, uint8_t, uint8_t, uint8_t);
 
-    bgColor get_bg(size_t, size_t) const;
-    void set_bg(size_t, size_t, bgColor);
+    BgColor get_bg(size_t, size_t) const;
+    void set_bg(size_t, size_t, BgColor);
     void set_bg(size_t, size_t, uint8_t, uint8_t, uint8_t);
 
     style get_style(size_t, size_t) const;
@@ -184,58 +213,51 @@ class Window {
     void set_grid(const std::vector<std::vector<Cell>> &);
     void copy_grid_from(const Window&);
 
-    fgColor get_default_fg() const;
-    void set_default_fg(fgColor);
+    FgColor get_default_fg() const;
+    void set_default_fg(FgColor);
     void set_default_fg(uint8_t, uint8_t, uint8_t);
-    bgColor get_default_bg() const;
-    void set_default_bg(bgColor);
+
+    BgColor get_default_bg() const;
+    void set_default_bg(BgColor);
     void set_default_bg(uint8_t, uint8_t, uint8_t);
+
     style get_default_style() const;
     void set_default_style(style);
 
-    // Writes the argument string at starting at (cursor_x, cursor_y)
-    // into the grid and moves the cursor variables to the position 
-    // after the last printed character.
-    // Returns the number of characters (char32_t) actually written.
+    bool is_wordwrap() const;
+    void set_wordwrap(bool = true);
+    
+    // writes a string from the cursor position on into the grid and moves 
+    // the cursor // to the next free position. Returns the number of 
+    // codepoints (char32_t) actually written. Simple word wrap mechanism if 
+    // wordwrap == true, but not considering any text already in the grid.
     size_t write(const std::u32string&,
-                     fgColor = fg::unspecified,
-                     bgColor = bg::unspecified,
-                     style = style::unspecified);
+                 FgColor = fg::unspecified,
+                 BgColor = bg::unspecified,
+                 style = style::unspecified);
 
-    // Likewise, but returns the number of utf8 bytes actually written
+    // likewise, but returning the number of bytes (utf8) written
     size_t write(const std::string&,
-                     fgColor = fg::unspecified,
-                     bgColor = bg::unspecified,
-                     style = style::unspecified);
+                 FgColor = fg::unspecified,
+                 BgColor = bg::unspecified,
+                 style = style::unspecified);
 
-    size_t write(char32_t,
-                     fgColor = fg::unspecified,
-                     bgColor = bg::unspecified,
-                     style = style::unspecified);
+    // when passing a single codepoint to write(), word wrap is never
+    // active. Returns 1 if success.
+    size_t write(char32_t ch,
+                 FgColor = fg::unspecified,
+                 BgColor = bg::unspecified,
+                 style = style::unspecified);
 
-    size_t write_wordwrap(const std::u32string&,
-                     fgColor = fg::unspecified,
-                     bgColor = bg::unspecified,
-                     style = style::unspecified);
-
-    size_t write_wordwrap(const std::string&,
-                     fgColor = fg::unspecified,
-                     bgColor = bg::unspecified,
-                     style = style::unspecified);
-
-    std::u32string get_wrappable() const;
-    void set_wrappable(const std::u32string&);
-    std::u32string get_skippable() const;
-    void set_skippable(const std::u32string&);
-
-    void fill_fg(size_t, size_t, size_t, size_t, fgColor);
-    void fill_bg(size_t, size_t, size_t, size_t, bgColor);
+    
+    void fill_fg(size_t, size_t, size_t, size_t, FgColor);
+    void fill_bg(size_t, size_t, size_t, size_t, BgColor);
     void fill_style(size_t, size_t, size_t, size_t, style);
 
     void print_rect(int, int, size_t, size_t,
                     border_t = border_t::LINE,
-                    fgColor = fg::unspecified,
-                    bgColor = bg::unspecified);
+                    FgColor = fg::unspecified,
+                    BgColor = bg::unspecified);
 
     void clear_row(size_t);
     void clear_grid();
@@ -262,8 +284,8 @@ class ChildWindow : public Window {
     size_t offset_x{}, offset_y{};
     std::u32string title;
     border_t border;
-    fgColor border_fg;
-    bgColor border_bg;
+    FgColor border_fg;
+    BgColor border_bg;
     bool visible{};
 
     ChildWindow(Window* ptr, size_t o_x, size_t o_y,
@@ -283,11 +305,13 @@ class ChildWindow : public Window {
     void set_title(const std::string&);
     void set_title(const std::u32string&);
     border_t get_border() const;
-    void set_border(border_t, fgColor = fg::unspecified, bgColor = bg::unspecified);
-    fgColor get_border_fg() const;
-    void set_border_fg(fgColor);
-    bgColor get_border_bg() const;
-    void set_border_bg(bgColor);
+    void set_border(border_t, 
+            FgColor = fg::unspecified, 
+            BgColor = bg::unspecified);
+    FgColor get_border_fg() const;
+    void set_border_fg(FgColor);
+    BgColor get_border_bg() const;
+    void set_border_bg(BgColor);
     bool is_visible() const;
     void show();
     void hide();
@@ -297,5 +321,3 @@ class ChildWindow : public Window {
 
 
 }  // namespace Term
-#endif // wIndOW_HeaDERguARd
-
