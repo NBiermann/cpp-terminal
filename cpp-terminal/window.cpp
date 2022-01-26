@@ -680,7 +680,7 @@ size_t Term::Window::write(const u32string& s,
                            FgColor a_fg,
                            BgColor a_bg,
                            style a_style) {
-    if (wordwrap) return write_wordwrap(s, a_fg, a_bg, a_style);
+    if (wordwrap && width_fixed) return write_wordwrap(s, a_fg, a_bg, a_style);
     return simple_write(s, a_fg, a_bg, a_style);
 }
 
@@ -688,7 +688,7 @@ size_t Term::Window::write(const string& s,
                            FgColor a_fg, 
                            BgColor a_bg, 
                            style a_style) {
-    if (wordwrap) return write_wordwrap(s, a_fg, a_bg, a_style);
+    if (wordwrap && width_fixed) return write_wordwrap(s, a_fg, a_bg, a_style);
     return simple_write(s, a_fg, a_bg, a_style);
 }
 
@@ -824,19 +824,23 @@ void Term::Window::clear() {
 
 Term::Window Term::Window::cutout(size_t x0, size_t y0,
                                   size_t width, size_t height) const {
+    // TODO what about the children?
     Window cropped(width, height);
-    for (size_t y = y0; y != y0 + height && y < h; ++y) {
-        for (size_t x = x0; x != x0 + width && x < grid[y].size(); ++x) {
-            cropped.grid[y].push_back(grid[y][x]);
+    for (size_t y = 0; y != height && y0 + y < h; ++y) {
+        for (size_t x = 0; x != width && x0 + x < grid[y0 + y].size(); ++x) {
+            cropped.grid[y].push_back(grid[y0 + y][x0 + x]);
         }
     }
     // preserve cursor if within cut-out
     if (cursor_x < x0 || cursor_x >= x0 + width || cursor_y < y0
         || cursor_y >= y0 + height) {
         cropped.set_cursor(0, 0);
+        cropped.hide_cursor();
     }
     else {
         cropped.set_cursor(cursor_x - x0, cursor_y - y0);
+        if (is_cursor_visible) cropped.show_cursor();
+        else cropped.hide_cursor();
     }
     return cropped;
 }
