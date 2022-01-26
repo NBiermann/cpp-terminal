@@ -154,7 +154,7 @@ class Window {
                           style = style::unspecified);
 
    public :
-    Window(size_t w_ = 0, size_t h_ = 0);
+    Window(size_t width = 0, size_t height = 0);
 
     virtual ~Window();
 
@@ -171,21 +171,21 @@ class Window {
     virtual void resize(size_t, size_t);
     void trim(size_t, size_t);
 
-    bool is_width_fixed() const;
+    bool is_width_fixed() const; // default: true
     void set_width_fixation (bool);
 
-    bool is_height_fixed() const;
+    bool is_height_fixed() const; // default: true
     void set_height_fixation (bool);
 
     size_t get_cursor_x() const;
     size_t get_cursor_y() const;
     void set_cursor(size_t, size_t);
 
-    bool is_cursor_visible() const;
+    bool is_cursor_visible() const; // default: true
     void show_cursor();
     void hide_cursor();
 
-    size_t get_tabsize() const;
+    size_t get_tabsize() const; // default: 4
     void set_tabsize(size_t);
 
     char32_t get_char(size_t, size_t) const;
@@ -213,24 +213,25 @@ class Window {
     void set_grid(const std::vector<std::vector<Cell>> &);
     void copy_grid_from(const Window&);
 
-    FgColor get_default_fg() const;
+    FgColor get_default_fg() const; // default: fg::reset
     void set_default_fg(FgColor);
     void set_default_fg(uint8_t, uint8_t, uint8_t);
 
-    BgColor get_default_bg() const;
+    BgColor get_default_bg() const; // default: bg::reset
     void set_default_bg(BgColor);
     void set_default_bg(uint8_t, uint8_t, uint8_t);
 
-    style get_default_style() const;
+    style get_default_style() const; // default: style::reset
     void set_default_style(style);
 
-    bool is_wordwrap() const;
+    bool is_wordwrap() const; // default: false
     void set_wordwrap(bool = true);
     
-    // writes a string from the cursor position on into the grid and moves 
-    // the cursor // to the next free position. Returns the number of 
-    // codepoints (char32_t) actually written. Simple word wrap mechanism if 
-    // wordwrap == true, but not considering any text already in the grid.
+    // writes a string from the cursor position on into the grid and moves
+    // the cursor to the next free position. Returns the number of codepoints
+    // (char32_t) actually written. Applies word wrap if and only if
+    // width_fixed == true && and wordwrap == true, but not considering
+    // nor touching any text already present in the grid.
     size_t write(const std::u32string&,
                  FgColor = fg::unspecified,
                  BgColor = bg::unspecified,
@@ -243,7 +244,7 @@ class Window {
                  style = style::unspecified);
 
     // when passing a single codepoint to write(), word wrap is never
-    // active. Returns 1 if success.
+    // applied. Returns 1 if success.
     size_t write(char32_t ch,
                  FgColor = fg::unspecified,
                  BgColor = bg::unspecified,
@@ -306,8 +307,8 @@ class ChildWindow : public Window {
     void set_title(const std::u32string&);
     border_t get_border() const;
     void set_border(border_t, 
-            FgColor = fg::unspecified, 
-            BgColor = bg::unspecified);
+                    FgColor = fg::unspecified, 
+                    BgColor = bg::unspecified);
     FgColor get_border_fg() const;
     void set_border_fg(FgColor);
     BgColor get_border_bg() const;
