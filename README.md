@@ -25,13 +25,13 @@ This is a fork of https://github.com/jupyter-xeus/cpp-terminal. While my first m
 
 #### Windows and Linux:
 
-- The `Window` class holds a `char32_t` array of fixed size for the Unicode grapheme cluster (i.e., the displayed character) in each cell. Trying to fill a cell with a grapheme cluster longer than `MAX_GRAPHEME_LENGTH` throws an exception. You may of course adjust this value in `window.hpp` to your needs.
-- I have not considered multi-width letters nor the `ZERO WIDTH JOINER` (`U+200D`). These will lead to unpredictable behavior.
+- The `Window` class holds a `char32_t` array of fixed size for the Unicode grapheme cluster (i.e., the displayed character) for each cell. Trying to fill a cell with a grapheme cluster longer than `MAX_GRAPHEME_LENGTH` throws an exception. You may of course adjust this value in `window.hpp` to your needs.
+- As for the grapheme clusters, I have not yet considered multi-width letters nor the `ZERO WIDTH JOINER` (`U+200D`). In fact, anything other than combining character sequences might lead to unpredictable behavior, depending on the built-in abilities of the console.
 
 #### Windows only:
 
 - AFAIK, only Unicode characters in BMP (i.e., below `U'\x10000'`) are supported in a Windows console.
-- Windows terminals do not yet correctly display combining characters. The `Window::write()` and `Window::write_wordwrap()` methods perform a NFC normalization on the passed string as a workaround. Only if there is a matching composed character, a combining sequence will display correctly. I hope that this restriction will eventually be fixed by the new Windows Terminal (https://github.com/Microsoft/Terminal).
+- Windows consoles do not yet correctly display combining characters. The `Window::set_grapheme()` method performs a NFC normalization on the passed string as a workaround. Which means that only if there is a matching composed character, a combining sequence will display correctly. I hope that this restriction will eventually be fixed in the new [Windows Terminal](https://github.com/Microsoft/Terminal).
 
 -----
 
@@ -349,6 +349,13 @@ class Cell {
     Cell(const std::u32string&, FgColor, BgColor, style);
 };
 
+struct Cursor {
+    size_t x = 0;
+    size_t y = 0;
+    bool is_visible = false;
+    Cursor() = default;
+    Cursor(size_t, size_t, bool);
+};
 
 /* Represents a rectangular window, as a 2D array of characters and their 
  * attributes as defined in the "Cell" class. The draw_window() method of the
@@ -379,11 +386,15 @@ class Window {
     bool is_height_fixed() const; // default: true
     void set_height_fixation (bool);
 
-    size_t get_cursor_x() const;
-    size_t get_cursor_y() const;
+    bool is_size_fixed() const; // both width and height fixed?
+    void fix_size(); // fix width and height
+    void unfix_size(); // unfix them
+    
+    const Cursor& get_cursor() const; // by default, cursor is visible
     void set_cursor(size_t, size_t);
+    void set_cursor(size_t, size_t, bool);
+    void set_cursor(Cursor);
 
-    bool is_cursor_visible() const; // default: true
     void show_cursor();
     void hide_cursor();
 
@@ -468,12 +479,21 @@ class Window {
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
     ChildWindow* new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
                            border_t b = border_t::LINE);
-    ChildWindow* get_child_ptr(size_t);
+                           
+    ChildWindow* get_child(size_t);
     size_t get_child_index(ChildWindow*) const;
     size_t get_children_count() const;
+    
     void child_to_foreground(ChildWindow*);
     void child_to_background(ChildWindow*);
-    void take_cursor_from_child(ChildWindow*);
+    
+    bool is_descendant(ChildWindow*) const;
+    
+    Window* get_visual_cursor_holder() const; // default: this
+    void hand_over_visual_cursor(ChildWindow*);
+    void take_over_visual_cursor();
+    Cursor get_visual_cursor() const;
+    
     Window merge_children() const;
    };
 
@@ -481,7 +501,7 @@ class Window {
 class ChildWindow : public Window {
    public :
     bool is_base_window() override; // returns false
-    Window* get_parent_ptr() const;
+    Window* get_parent() const;
     bool is_inside_parent() const;
     size_t get_offset_x() const;
     size_t get_offset_y() const;

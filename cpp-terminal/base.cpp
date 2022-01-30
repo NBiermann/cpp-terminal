@@ -242,13 +242,14 @@ void Term::Terminal::draw_window (const Window& win,
     if (current_style != style::reset) out.append(color(style::reset));
     cout << out << flush;
     // place cursor
-    if (!win.is_cursor_visible()) return;
-    if (win.get_cursor_x() < x0) return;
-    size_t cursor_x = win.get_cursor_x() - x0;
-    if (cursor_x >= w || cursor_x >= win.get_w()) return;
-    if (win.get_cursor_y() < y0) return;
-    size_t cursor_y = win.get_cursor_y() - y0;  
-    if (cursor_y >= h || cursor_y >= win.get_h()) return;
-    cout << Term::move_cursor(cursor_x, cursor_y);
+    Cursor cur = win.get_visual_cursor();
+    if (!cur.is_visible) return;
+    if (cur.x < x0) return;
+    cur.x -= x0;
+    if (cur.x >= w || cur.x >= win.get_w()) return;
+    if (cur.y < y0) return;
+    cur.y -= y0;  
+    if (cur.y >= h || cur.y >= win.get_h()) return;
+    cout << Term::move_cursor(cur.x, cur.y);
     cout << cursor_on() << flush;
 }

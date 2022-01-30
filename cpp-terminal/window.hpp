@@ -74,8 +74,7 @@ public :
  * Unicode grapheme cluster), the foreground and background colors and the 
  * style of this specific cell.
  */
-class Cell {
-   public:
+struct Cell {
 	FgColor cell_fg;
 	BgColor cell_bg;
 	style cell_style;
@@ -89,6 +88,13 @@ class Cell {
     Cell(const std::u32string&, FgColor, BgColor, style);
 };
 
+struct Cursor {
+    size_t x = 0;
+    size_t y = 0;
+    bool is_visible = false;
+    Cursor() = default;
+    Cursor(size_t x_, size_t y_, bool v_) : x(x_), y(y_), is_visible(v_) {}
+};
 
 class ChildWindow; // forward declaration
 
@@ -102,9 +108,8 @@ class Window {
     size_t w{}, h{};               // width and height of the window
     bool width_fixed{};            // if w may not grow automatically
     bool height_fixed{};           // same for h
-    bool cursor_visibility{};
+    Cursor cursor;
     bool wordwrap{};
-    size_t cursor_x{}, cursor_y{}; // current cursor position
     size_t tabsize{};
 
     FgColor default_fg;
@@ -112,32 +117,35 @@ class Window {
     style default_style{};
     std::vector<std::vector<Cell>> grid; // the cells (grid[0] is top row)
     std::vector<ChildWindow*> children;
+    Window* visual_cursor_holder{}; // default: this
 
-    // word wrap control
+    // word wrap control (these variables could be made publicly available
+    // in a future version)
     // allow word wrap after whitespace and any of the following characters:
-    std::u32string wrap_after = U"-.,;:/\\)]}";
+    std::u32string wrap_after = U"-.,;:/\\)]}>";
     // allow word wrap before whitespace and any of the following characters:
-    std::u32string wrap_before = U"([{";
+    std::u32string wrap_before = U"([{<";
     // if line is completely filled and whitespace follows, skip
     // one whitespace character:
     bool skip_whitespace_at_eol = true;
 
-    void assure_pos(size_t x, size_t y);     
-    // Writes the argument string at starting at (cursor_x, cursor_y)
-    // into the grid and moves the cursor variables to the position
-    // after the last printed character.
-    // Returns the number of codepoints (char32_t) actually written.
+    // increases size of grid and/or grid[y] to include (x, y) unless forbidden 
+    // by the fixation of width/height in which case an exception is thrown
+    void assure_pos(size_t x, size_t y);
+
+    // Writes the argument string starting at (cursor_x, cursor_y) into the
+    // grid and moves the cursor to the position after the last printed
+    // character. Returns the number of codepoints (char32_t) actually written.
     size_t simple_write(const std::u32string&,
                              FgColor = fg::unspecified,
                              BgColor = bg::unspecified,
                              style = style::unspecified);
-
     // Likewise, but returns the number of utf8 bytes actually written
     size_t simple_write(const std::string&,
                              FgColor = fg::unspecified,
                              BgColor = bg::unspecified,
                              style = style::unspecified);
-
+    // Returns 1 if the character could be written, otherwise 0
     size_t simple_write(char32_t,
                              FgColor = fg::unspecified,
                              BgColor = bg::unspecified,
@@ -171,18 +179,26 @@ class Window {
     virtual void resize(size_t, size_t);
     void trim(size_t, size_t);
 
-    bool is_width_fixed() const; // default: true
-    void set_width_fixation (bool);
+    // true by default, but false if windows is initialized with w = 0
+    bool is_width_fixed() const;
+    void fix_width();
+    void unfix_width();
 
-    bool is_height_fixed() const; // default: true
-    void set_height_fixation (bool);
+    // true by default, but false if windows is initialized with h = 0
+    bool is_height_fixed() const;
+    void fix_height();
+    void unfix_height();
 
-    size_t get_cursor_x() const;
-    size_t get_cursor_y() const;
+    bool is_size_fixed() const; // true only if both width and height fixed
+    void fix_size(); // fix both width and height
+    void unfix_size(); // unfix them
+ 
+    const Cursor& get_cursor() const;
     void set_cursor(size_t, size_t);
+    void set_cursor(size_t, size_t, bool);
+    void set_cursor(Cursor);
 
-    bool is_cursor_visible() const; // default: true
-    void show_cursor();
+    void show_cursor(); // by default, cursor is visible
     void hide_cursor();
 
     size_t get_tabsize() const; // default: 4
@@ -237,20 +253,19 @@ class Window {
                  BgColor = bg::unspecified,
                  style = style::unspecified);
 
-    // likewise, but returning the number of bytes (utf8) written
+    // likewise, but returns the number of bytes (utf8) written
     size_t write(const std::string&,
                  FgColor = fg::unspecified,
                  BgColor = bg::unspecified,
                  style = style::unspecified);
 
     // when passing a single codepoint to write(), word wrap is never
-    // applied. Returns 1 if success.
+    // applied. Returns 1 if success, otherwise 0.
     size_t write(char32_t ch,
                  FgColor = fg::unspecified,
                  BgColor = bg::unspecified,
                  style = style::unspecified);
 
-    
     void fill_fg(size_t, size_t, size_t, size_t, FgColor);
     void fill_bg(size_t, size_t, size_t, size_t, BgColor);
     void fill_style(size_t, size_t, size_t, size_t, style);
@@ -265,14 +280,24 @@ class Window {
     void clear();
 
     Window cutout(size_t x0, size_t y0, size_t width, size_t height) const;
-    ChildWindow* new_child(size_t o_x, size_t o_y, size_t w_, size_t h_,
+
+    ChildWindow* new_child(size_t = 0, size_t = 0, size_t = 0, size_t = 0,
                            border_t b = border_t::LINE);
-    ChildWindow* get_child_ptr(size_t);
+
+    ChildWindow* get_child(size_t);
     size_t get_child_index(ChildWindow*) const;
     size_t get_children_count() const;
+
     void child_to_foreground(ChildWindow*);
     void child_to_background(ChildWindow*);
-    void take_cursor_from_child(ChildWindow*);
+
+    bool is_descendant(ChildWindow*) const;
+
+    Window* get_visual_cursor_holder() const; // default: this
+    void hand_over_visual_cursor(ChildWindow*);
+    void take_over_visual_cursor();
+    Cursor get_visual_cursor() const;
+
     Window merge_children() const;
 };
 
@@ -281,7 +306,7 @@ class ChildWindow : public Window {
     friend Window;
 
    private:
-    Window *parent_ptr;
+    Window *parent;
     size_t offset_x{}, offset_y{};
     std::u32string title;
     border_t border;
@@ -289,7 +314,7 @@ class ChildWindow : public Window {
     BgColor border_bg;
     bool visible{};
 
-    ChildWindow(Window* ptr, size_t o_x, size_t o_y,
+    ChildWindow(Window* ptr, size_t off_x, size_t off_y,
                 size_t w_, size_t h_, border_t b = border_t::LINE);
     ChildWindow(const ChildWindow&) = default;
     ChildWindow(ChildWindow&&) = default;
@@ -297,8 +322,11 @@ class ChildWindow : public Window {
 
    public :
     bool is_base_window() override {return false;}
-    Window* get_parent_ptr() const;
-    bool is_inside_parent() const;
+    Window* get_parent() const;
+    // is_inside_parent() returns true if the child, including its border,  is 
+    // entirely inside the parent window. When strict == false, the 
+    // borders of parent and child are allowed to (partially) coincide.
+    bool is_inside_parent(bool strict = true) const;
     size_t get_offset_x() const;
     size_t get_offset_y() const;
     std::pair<size_t, size_t> move_to(size_t, size_t);
@@ -319,6 +347,5 @@ class ChildWindow : public Window {
     void to_foreground();
     void to_background();
 };
-
 
 }  // namespace Term

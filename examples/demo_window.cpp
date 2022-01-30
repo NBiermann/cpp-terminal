@@ -15,20 +15,20 @@ int main()
 {
     try {
         Terminal term(CLEAR_SCREEN | RAW_INPUT | DISABLE_CTRL_C);
-        Window win; // sizing will take place in the main loop
+        Window win(term.get_w(), term.get_h());
         win.set_wordwrap(true);
         u32string info = // will be filled into win in the main loop
             U"This demo illustrates several features of the \"Window\" "
             "class. Type some text into the green window, press F2 or "
             "F3 to place the cursor in the red or blue window, and F1 to go "
-            "back to the green one. (Technically, these are subwindows and "
+            "back to the green one. (Technically, those are subwindows and "
             "this text is in the main window.) Use backspace to modify your "
             "input. The arrow keys move the active window around. "
             "Ctrl-F1/F2/F3 hides resp. shows again the green/red/blue window. "
             "The green window has a fixed size, while the red one will "
-            "expand its width according to the typed-in text, "
+            "expand its width according to the typed-in text "
             "and the blue one is able to grow in height. The blue "
-            "and the main window have word-wrap activated. If your active "
+            "and the main window have word wrap enabled. If your active "
             "window is obscured by another one, press Shift-F1/F2/F3 "
             "to bring it to the foreground. There is also "
             "a sub-subwindow located inside the green one. Press Ctrl-F4 to "
@@ -62,45 +62,52 @@ int main()
                 cwin = child[0]->new_child(start_x[3], start_y[3],
                         default_w[3], default_h[3], border_t::LINE);
             }
-            cwin->set_width_fixation(fixed_w[i]);
-            cwin->set_height_fixation(fixed_h[i]);
+            if(!fixed_w[i]) cwin->unfix_width();
+            if (!fixed_h[i]) cwin->unfix_height();
             cwin->set_border_fg(border_col[i]);
             cwin->set_default_fg(fg_col[i]);
             cwin->set_default_bg(bg_col[i]);
             cwin->set_title(title[i]);
             cwin->show_cursor();
-            if (i < 3) cwin->show(); // initially, hide #4
+            // show #1..3, hide #4
+            if (i < 3) cwin->show(); 
             child.push_back(cwin);
         }
         child[2]->set_wordwrap(true);
-        // prepare exit dialog (ctrl-c pressed)
-        ChildWindow *exit_dialog = win.new_child(0,0,10,2,border_t::LINE);
-        exit_dialog->set_width_fixation(false);
+        // prepare exit dialog (shows up when ctrl-c pressed)
+        ChildWindow *exit_dialog = win.new_child(0,0,0,0,border_t::LINE);
+        exit_dialog->unfix_size();
         exit_dialog->set_border_fg(fg::magenta);
         exit_dialog->set_default_bg(bg::magenta);
         exit_dialog->write("Ctrl-C pressed.\nDo you want to exit? [Y/n]");
-
+        // prepare main loop
         size_t active_child = 0;
         vector<u32string> input(4);
         bool update = true;
         bool accept_input = true;
         bool abort = false;
+        bool refill_win = true;
+        // main loop
         while (!abort) {
             cwin = child[active_child];
             cwin->set_border(border_t::DOUBLE_LINE);
-            if (term.update_size() || win.get_w() == 0 || win.get_h() == 0) {
+            win.hand_over_visual_cursor(cwin);
+            if (term.update_size()) {
                 win.clear_grid();
                 win.resize(term.get_w(), term.get_h());
-                size_t written;
+                refill_win = true;
+            }
+            if (refill_win) {
+                size_t written{};
                 do {
                     written = win.write(info);
                 } while(written == info.size());
+                refill_win = false;
                 update = true;
             }
             if (update) {
-                win.take_cursor_from_child(cwin);
                 term.draw_window(win);
-                accept_input = win.is_cursor_visible();
+                accept_input = win.get_visual_cursor().is_visible;
                 update = false;
             }
             char32_t ch = read_key0();
@@ -219,7 +226,7 @@ int main()
                     child[3]->hide();
                 } else {
                     child[3]->show();
-                    // parent child must be visible too
+                    // make parental child visible too
                     child[0]->show(); 
                 }
                 update = true;
@@ -254,6 +261,10 @@ int main()
                 } else {
                     continue;
                 }
+            case Key::CTRL | Key::BACKSPACE:
+                if (!accept_input) continue;
+                input[active_child].clear();
+                break;
             case Key::CTRL_C: {
                 // place exit dialog in center
                 int x = (win.get_w() - exit_dialog->get_w()) / 2;
@@ -261,7 +272,7 @@ int main()
                 exit_dialog->move_to(x < 0 ? 0 : x, y < 0 ? 0 : y);
                 exit_dialog->to_foreground();
                 exit_dialog->show();
-                win.take_cursor_from_child(exit_dialog);
+                win.hand_over_visual_cursor(exit_dialog);
                 term.draw_window(win);
                 char32_t key;
                 do {
