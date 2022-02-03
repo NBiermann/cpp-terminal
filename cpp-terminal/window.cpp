@@ -388,8 +388,7 @@ Term::Window Term::Window::merge_children() const {
         // merge_into_grid() is recursive
         cwin->merge_into_grid(&res, 0, 0, w, h);
     }
-    res.cursor.x = cursor.x;
-    res.cursor.y = cursor.y;
+    res.cursor = get_visual_cursor();
     return res;
 }
 
@@ -398,18 +397,21 @@ size_t Term::Window::get_w() const {
 }
 
 void Term::Window::set_w(size_t new_w) {
-    if (new_w == w)
-        return;
+    if (new_w == w) return;
     w = new_w;
     for (size_t y = 0; y != grid.size(); ++y) {
         if (grid[y].size() > w)
             grid[y].resize(w);
     }
+    // TODO inconsistent! Make decision if w == 0 or h == 0
+    // are allowed at all and what to do with the cursor then.
+    // (Don't forget the fix/unfix question in constructor)
+    if (w == 0) cursor.x = 0;
+    else if (cursor.x >= w) cursor.x = w - 1;
 }
 
 void Term::Window::trim_w(size_t minimal_width) {
-    // TODO test for content, not only size of row?
-    // TODO maybe not consider cursor?
+    // TODO test for content, not only size of row!
     if (w <= minimal_width) {
         set_w(minimal_width);
         return;
@@ -427,13 +429,15 @@ size_t Term::Window::get_h() const {
 }
 
 void Term::Window::set_h(size_t new_h) {
+    if (new_h == h) return;
     grid.resize(new_h);
     h = new_h;
+    if (h == 0) cursor.y = 0;
+    else if (cursor.y >= h) cursor.y = h - 1;
 }
 
 void Term::Window::trim_h(size_t minimal_height) {
-    // TODO test for content, not only size of rows?
-    // TODO maybe not consider cursor?
+    // TODO test for content, not only size of rows!
     if (h <= minimal_height || grid.size() <= minimal_height) {
         set_h(minimal_height);
         return;
@@ -532,21 +536,6 @@ void Term::Window::set_tabsize(size_t ts) {
     tabsize = ts;
 }
 
-char32_t Term::Window::get_char(size_t x, size_t y) const {
-    // TODO test grapheme length first?!
-    if (y >= grid.size() || x >= grid[y].size() ||
-        grid[y][x].grapheme_length == 0) {
-        return U' ';
-    }
-    return grid[y][x].ch[0];
-}
-
-void Term::Window::set_char(size_t x, size_t y, char32_t c) {
-    assure_pos(x, y);
-    grid[y][x].grapheme_length = 1;
-    grid[y][x].ch[0] = c;
-}
-
 uint8_t Term::Window::get_grapheme_length(size_t x, size_t y) const {
     if (y < grid.size() && x < grid[y].size())
         return grid[y][x].grapheme_length;
@@ -570,6 +559,12 @@ void Term::Window::set_grapheme(size_t x, size_t y, const u32string& s) {
             "Window::set_grapheme(): grapheme cluster too long");
     grid[y][x].grapheme_length = norm.size();
     norm.copy(grid[y][x].ch, norm.size());
+}
+
+void Term::Window::set_char(size_t x, size_t y, char32_t c) {
+    assure_pos(x, y);
+    grid[y][x].grapheme_length = 1;
+    grid[y][x].ch[0] = c;
 }
 
 Term::FgColor Term::Window::get_fg(size_t x, size_t y) const {
