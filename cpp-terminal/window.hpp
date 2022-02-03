@@ -162,19 +162,27 @@ class Window {
                           style = style::unspecified);
 
    public :
-    Window(size_t width = 0, size_t height = 0);
+    Window(size_t width = 1, size_t height = 1);
 
     virtual ~Window();
 
     virtual bool is_base_window() {return true;}
 
     size_t get_w() const;
+    // Decreasing w deletes all cells to the right of the new limit w.
+    // If outside the new width, cursor.x will be set to w - 1
     virtual void set_w(size_t);
-    void trim_w(size_t);
+    // trim_w() deletes only cells with empty/unspecified content and will
+    // not make w less or equal to cursor.x
+    void trim_w(size_t minimum_width);
 
     size_t get_h() const;
+    // Decreasing h deletes the bottom rows to fit the new height h.
+    // If outside the new height, cursor.y will be set to h - 1
     virtual void set_h(size_t);
-    void trim_h(size_t);
+    // trim_h() deletes only cells with empty/unspecified content and will
+    // not make h less or equal to cursor.y
+    void trim_h(size_t minimum_height);
 
     virtual void resize(size_t, size_t);
     void trim(size_t, size_t);
@@ -202,14 +210,12 @@ class Window {
     void hide_cursor();
 
     size_t get_tabsize() const; // default: 4
-    void set_tabsize(size_t);
-
-    char32_t get_char(size_t, size_t) const;
-    void set_char(size_t, size_t, char32_t);
+    void set_tabsize(size_t);    
 
     uint8_t get_grapheme_length(size_t, size_t) const;
     std::u32string get_grapheme(size_t, size_t) const;
     void set_grapheme(size_t, size_t, const std::u32string&);
+    void set_char(size_t, size_t, char32_t);
 
     FgColor get_fg(size_t, size_t) const;
     void set_fg(size_t, size_t, FgColor);
@@ -246,8 +252,8 @@ class Window {
     // writes a string from the cursor position on into the grid and moves
     // the cursor to the next free position. Returns the number of codepoints
     // (char32_t) actually written. Applies word wrap if and only if
-    // width_fixed == true && and wordwrap == true, but not considering
-    // nor touching any text already present in the grid.
+    // width_fixed == true && and wordwrap == true, albeit not touching
+    // nor reflecting any text already present in the grid.
     size_t write(const std::u32string&,
                  FgColor = fg::unspecified,
                  BgColor = bg::unspecified,
