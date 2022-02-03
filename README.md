@@ -390,23 +390,21 @@ class Window {
     void fix_size(); // fix width and height
     void unfix_size(); // unfix them
     
-    const Cursor& get_cursor() const; // by default, cursor is visible
+    const Cursor& get_cursor() const;
     void set_cursor(size_t, size_t);
     void set_cursor(size_t, size_t, bool);
     void set_cursor(Cursor);
 
-    void show_cursor();
+    void show_cursor(); // by default, cursor is visible
     void hide_cursor();
 
     size_t get_tabsize() const; // default: 4
     void set_tabsize(size_t);
 
-    char32_t get_char(size_t, size_t) const;
-    void set_char(size_t, size_t, char32_t);
-
     uint8_t get_grapheme_length(size_t, size_t) const;
     std::u32string get_grapheme(size_t, size_t) const;
     void set_grapheme(size_t, size_t, const std::u32string&);
+    void set_char(size_t, size_t, char32_t);
 
     FgColor get_fg(size_t, size_t) const;
     void set_fg(size_t, size_t, FgColor);
@@ -444,7 +442,7 @@ class Window {
     // the cursor to the next free position. Returns the number of codepoints
     // (char32_t) actually written. Applies a simple word wrap algorithm if
     // and only if is_width_fixed() and is_wordwrap() both yield true, albeit 
-    // not considering nor touching any text already present in the grid.
+    // not touching nor reflecting any text already present in the grid.
     size_t write(const std::u32string&,
                  FgColor = fg::unspecified,
                  BgColor = bg::unspecified,
