@@ -242,7 +242,7 @@ void Term::Terminal::draw_window (const Window& win,
     if (current_style != style::reset) out.append(color(style::reset));
     cout << out << flush;
     // place cursor
-    Cursor cur = win.get_visual_cursor();
+    Cursor cur = merged_win.get_cursor();
     if (!cur.is_visible) return;
     if (cur.x < x0) return;
     cur.x -= x0;
